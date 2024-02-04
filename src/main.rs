@@ -77,6 +77,10 @@ impl CurrentPiece {
         false
     }
 }
+
+///
+/// Prints the text at the given position with the given color.
+///
 fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, usize)) {
     let _ = stdout()
         .execute(cursor::MoveTo(
@@ -89,46 +93,9 @@ fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, usiz
         .execute(Print(text));
 }
 
-fn print_piece(piece: &Piece, x: u16, y: u16, board_offset: (usize, usize)) {
-    for square in piece.view() {
-        print_xy(
-            (2 * (square.x + x as i32)) as u16,
-            (square.y + y as i32) as u16,
-            Color::AnsiValue(piece.color),
-            BLOCK,
-            board_offset,
-        );
-    }
-}
-fn print_board(board: &Board, board_offset: (usize, usize)) {
-    let _ = stdout().execute(terminal::Clear(terminal::ClearType::All));
-
-    for y in 0..board.height {
-        for x in 0..board.width {
-            if board.cells[x][y] > 0 && board.cells[x][y] < 255 {
-                print_xy(
-                    x as u16 * 2,
-                    y as u16,
-                    Color::AnsiValue(board.cells[x][y]),
-                    BLOCK,
-                    board_offset,
-                );
-            }
-        }
-        println!();
-    }
-}
-
-fn draw_current_piece(current_piece: &CurrentPiece, board: &mut Board) {
-    draw_piece(
-        &current_piece.piece,
-        board,
-        current_piece.x,
-        current_piece.y,
-        255,
-    );
-}
-
+///
+/// Clears any lines that are full and moves the lines above down.
+///
 fn clear_lines(board: &mut Board) {
     let mut y = board.height - 2;
     while y > 0 {
@@ -144,6 +111,22 @@ fn clear_lines(board: &mut Board) {
     }
 }
 
+///
+/// Draws the current piece on the board.
+///
+fn draw_current_piece(current_piece: &CurrentPiece, board: &mut Board) {
+    draw_piece(
+        &current_piece.piece,
+        board,
+        current_piece.x,
+        current_piece.y,
+        255,
+    );
+}
+
+///
+/// Draws the piece on the board.
+///
 fn draw_piece(piece: &Piece, board: &mut Board, x: u16, y: u16, color: u8) {
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
@@ -159,20 +142,16 @@ fn draw_piece(piece: &Piece, board: &mut Board, x: u16, y: u16, color: u8) {
         board.cells[x as usize][y as usize] = color;
     }
 }
+///
+/// Compares the current board with the next board and draws the differences.
+/// Copies changes from the next board to the current board, and then swaps the two boards.
+///
 fn draw_diff<'a>(
     current_board: &mut Board,
     next_board: &mut Board,
     current_piece_color: u8,
     board_offset: (usize, usize),
 ) {
-    // let mut new_board = board.clone();
-    // draw_piece(
-    //     &current_piece.piece,
-    //     &mut new_board,
-    //     current_piece.x as u16,
-    //     current_piece.y as u16,
-    //     255,
-    // );
     for y in 0..next_board.height {
         for x in 0..next_board.width {
             if (current_board.cells[x][y] > 0) && (next_board.cells[x][y] == 0) {
@@ -220,7 +199,7 @@ fn main() -> std::io::Result<()> {
     let mut rng = rand::thread_rng();
     let mut last_tick = std::time::SystemTime::now();
     let mut current_piece = CurrentPiece {
-        piece: PIECES[1].clone(),
+        piece: PIECES[rng.gen_range(0..6)].clone(),
         x: initial_positon.0 as u16,
         y: initial_positon.1 as u16,
     };
@@ -238,25 +217,27 @@ fn main() -> std::io::Result<()> {
 
     for i in 0..next_board.width {
         next_board.cells[i][next_board.height - 1] = 8;
-        current_board.cells[i][current_board.height - 1] = 8;
     }
 
     for i in 0..height {
         next_board.cells[0][i] = 8;
         next_board.cells[next_board.width - 1][i] = 8;
-        current_board.cells[0][i] = 8;
-        current_board.cells[current_board.width - 1][i] = 8;
     }
     terminal::enable_raw_mode()?;
     let _ = stdout()
         .execute(terminal::Clear(terminal::ClearType::All))?
         .execute(cursor::Hide);
 
-    print_board(&current_board, board_offet);
+    draw_diff(
+        &mut current_board,
+        &mut next_board,
+        current_piece.piece.color,
+        board_offet,
+    );
 
     loop {
         let mut changed = false;
-        if poll(std::time::Duration::from_millis(10))? {
+        if poll(std::time::Duration::from_millis(16))? {
             let event = read()?;
             changed = match event {
                 Event::Key(KeyEvent {
@@ -298,10 +279,7 @@ fn main() -> std::io::Result<()> {
                         true
                     }
                     KeyCode::Char('q') => break,
-                    KeyCode::Char('c') => {
-                        print_board(&current_board, board_offet);
-                        true
-                    }
+
                     _ => false,
                 },
 

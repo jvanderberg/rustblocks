@@ -1,4 +1,4 @@
-use std::io::stdout;
+use std::{cmp, io::stdout};
 mod pieces;
 use rand::Rng;
 
@@ -96,10 +96,12 @@ fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, usiz
 ///
 /// Clears any lines that are full and moves the lines above down.
 ///
-fn clear_lines(board: &mut Board) {
+fn clear_lines(board: &mut Board) -> i32 {
     let mut y = board.height - 2;
+    let mut lines = 0;
     while y > 0 {
         if (0..board.width).all(|x| board.cells[x][y] > 0) {
+            lines += 1;
             for y2 in (1..=y).rev() {
                 for x in 0..board.width {
                     board.cells[x][y2] = board.cells[x][y2 - 1];
@@ -109,6 +111,7 @@ fn clear_lines(board: &mut Board) {
             y -= 1;
         }
     }
+    lines
 }
 
 ///
@@ -181,7 +184,31 @@ fn draw_diff<'a>(
     }
     std::mem::swap(next_board, current_board);
 }
+
+fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32) {
+    let new_lines = lines + lines_cleared;
+    let new_level = (new_lines / 10) + 1;
+    let new_score = score + (lines_cleared * 100) + if lines_cleared == 4 { 1000 } else { 0 };
+    print_xy(
+        1,
+        3,
+        Color::AnsiValue(1),
+        format!("Score: {}", new_score).as_str(),
+        (0, 0),
+    );
+    print_xy(
+        1,
+        4,
+        Color::AnsiValue(1),
+        format!("Level: {}", new_level).as_str(),
+        (0, 0),
+    );
+    (new_lines, new_score, new_level)
+}
 fn main() -> std::io::Result<()> {
+    let mut lines = 0;
+    let mut level = 1;
+    let mut score = 0;
     let width: usize = 10;
     let height: usize = 22;
     let window_size = crossterm::terminal::size()?;
@@ -238,6 +265,18 @@ fn main() -> std::io::Result<()> {
     loop {
         let mut changed = false;
         if poll(std::time::Duration::from_millis(16))? {
+            let new_level = (lines / 10) + 1;
+            if new_level != level {
+                print_xy(
+                    1,
+                    1,
+                    Color::AnsiValue(1),
+                    format!("Level {}", new_level).as_str(),
+                    (0, 0),
+                );
+                level = new_level;
+            }
+
             let event = read()?;
             changed = match event {
                 Event::Key(KeyEvent {
@@ -269,7 +308,9 @@ fn main() -> std::io::Result<()> {
                             current_piece.piece.color,
                         );
 
-                        clear_lines(&mut next_board);
+                        (lines, score, level) =
+                            calc_score(clear_lines(&mut next_board), lines, score);
+
                         current_piece = CurrentPiece {
                             piece: PIECES[rng.gen_range(0..6)].clone(),
                             x: initial_positon.0 as u16,
@@ -286,7 +327,13 @@ fn main() -> std::io::Result<()> {
                 _ => false,
             }
         }
-        if last_tick.elapsed().unwrap().as_millis() > 1000 {
+
+        let mut interval = 1000 - level * 50;
+        if (interval as i32) < 250 {
+            interval = 250;
+        }
+
+        if last_tick.elapsed().unwrap().as_millis() > interval as u128 {
             last_tick = std::time::SystemTime::now();
             let success = current_piece.move_down(&current_board);
             if !success {
@@ -298,7 +345,8 @@ fn main() -> std::io::Result<()> {
                     current_piece.piece.color,
                 );
 
-                clear_lines(&mut next_board);
+                (lines, score, level) = calc_score(clear_lines(&mut next_board), lines, score);
+
                 current_piece = CurrentPiece {
                     piece: PIECES[rng.gen_range(0..6)].clone(),
                     x: initial_positon.0 as u16,

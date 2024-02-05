@@ -26,7 +26,7 @@ struct Board {
 }
 
 impl CurrentPiece {
-    fn collides(&self, board: &Board, x: u16, y: u16) -> bool {
+    pub fn collides(&self, board: &Board, x: u16, y: u16) -> bool {
         for square in self.piece.view() {
             let x = square.x + x as i32;
             let y = square.y + y as i32;
@@ -205,6 +205,27 @@ fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32) {
     );
     (new_lines, new_score, new_level)
 }
+
+fn print_next_piece(piece: &Piece, last_piece: &Piece) {
+    for square in last_piece.view() {
+        print_xy(
+            ((square.x + 2) * 2) as u16,
+            (square.y + 2) as u16,
+            Color::AnsiValue(piece.color),
+            "  ",
+            (1, 6),
+        );
+    }
+    for square in piece.view() {
+        print_xy(
+            ((square.x + 2) * 2) as u16,
+            (square.y + 2) as u16,
+            Color::AnsiValue(piece.color),
+            BLOCK,
+            (1, 6),
+        );
+    }
+}
 fn main() -> std::io::Result<()> {
     let mut lines = 0;
     let mut level = 1;
@@ -230,6 +251,8 @@ fn main() -> std::io::Result<()> {
         x: initial_positon.0 as u16,
         y: initial_positon.1 as u16,
     };
+
+    let mut next_piece: Piece = PIECES[rng.gen_range(0..6)].clone();
 
     let mut next_board = Board {
         width: width + 2,
@@ -312,10 +335,15 @@ fn main() -> std::io::Result<()> {
                             calc_score(clear_lines(&mut next_board), lines, score);
 
                         current_piece = CurrentPiece {
-                            piece: PIECES[rng.gen_range(0..6)].clone(),
+                            piece: next_piece,
                             x: initial_positon.0 as u16,
                             y: initial_positon.1 as u16,
                         };
+                        next_piece = PIECES[rng.gen_range(0..6)].clone();
+                        print_next_piece(&next_piece, &current_piece.piece);
+                        if current_piece.collides(&next_board, current_piece.x, current_piece.y) {
+                            break;
+                        }
 
                         true
                     }
@@ -348,10 +376,15 @@ fn main() -> std::io::Result<()> {
                 (lines, score, level) = calc_score(clear_lines(&mut next_board), lines, score);
 
                 current_piece = CurrentPiece {
-                    piece: PIECES[rng.gen_range(0..6)].clone(),
+                    piece: next_piece,
                     x: initial_positon.0 as u16,
                     y: initial_positon.1 as u16,
                 };
+                next_piece = PIECES[rng.gen_range(0..6)].clone();
+                print_next_piece(&next_piece, &current_piece.piece);
+                if current_piece.collides(&next_board, current_piece.x, current_piece.y) {
+                    break;
+                }
             } else {
                 draw_current_piece(&current_piece, &mut next_board);
             }

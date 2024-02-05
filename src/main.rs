@@ -1,13 +1,13 @@
-use std::{cmp, io::stdout};
+use std::io::stdout;
 mod pieces;
-use rand::Rng;
-
 use crossterm::{
     cursor,
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     style::{Color, Print, SetForegroundColor},
     terminal, ExecutableCommand,
 };
+use rand::prelude::SliceRandom;
+use rand::Rng;
 const BLOCK: &str = "\u{2588}\u{2588}";
 use pieces::Piece;
 use pieces::PIECES;
@@ -17,6 +17,29 @@ struct CurrentPiece {
     piece: Piece,
     x: u16,
     y: u16,
+}
+
+struct Bag {
+    pieces: Vec<Piece>,
+}
+
+impl Bag {
+    pub fn new() -> Bag {
+        let mut pieces = PIECES.to_vec();
+        let mut rng = rand::thread_rng();
+        pieces.shuffle(&mut rng);
+        Bag { pieces }
+    }
+
+    pub fn next(&mut self) -> Piece {
+        if self.pieces.len() == 0 {
+            self.pieces = PIECES.to_vec();
+            let mut rng = rand::thread_rng();
+            self.pieces.shuffle(&mut rng);
+        }
+        // This is safe because we just checked the length.
+        self.pieces.pop().unwrap()
+    }
 }
 #[derive(Clone)]
 struct Board {
@@ -82,6 +105,7 @@ impl CurrentPiece {
 /// Prints the text at the given position with the given color.
 ///
 fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, usize)) {
+    // Here we use unwrap, because really we want to crash if we can't display anything
     let _ = stdout()
         .execute(cursor::MoveTo(
             x + board_offset.0 as u16,
@@ -185,10 +209,22 @@ fn draw_diff<'a>(
     std::mem::swap(next_board, current_board);
 }
 
+///
+/// Calculates the new score, and as a side effect, prints the new score and level.
+///
 fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32) {
     let new_lines = lines + lines_cleared;
     let new_level = (new_lines / 10) + 1;
-    let new_score = score + (lines_cleared * 100) + if lines_cleared == 4 { 1000 } else { 0 };
+
+    let new_score = score
+        + match lines_cleared {
+            1 => 100 * new_level,
+            2 => 300 * new_level,
+            3 => 500 * new_level,
+            4 => 800 * new_level,
+            _ => 0,
+        };
+
     print_xy(
         1,
         3,
@@ -203,9 +239,19 @@ fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32) {
         format!("Level: {}", new_level).as_str(),
         (0, 0),
     );
+    print_xy(
+        1,
+        5,
+        Color::AnsiValue(1),
+        format!("Lines: {}", new_lines).as_str(),
+        (0, 0),
+    );
     (new_lines, new_score, new_level)
 }
 
+///
+/// Print the next piece in the upper left
+///
 fn print_next_piece(piece: &Piece, last_piece: &Piece) {
     for square in last_piece.view() {
         print_xy(
@@ -227,6 +273,7 @@ fn print_next_piece(piece: &Piece, last_piece: &Piece) {
     }
 }
 fn main() -> std::io::Result<()> {
+    let mut piece_bag = Bag::new();
     let mut lines = 0;
     let mut level = 1;
     let mut score = 0;
@@ -234,10 +281,6 @@ fn main() -> std::io::Result<()> {
     let height: usize = 22;
     let window_size = crossterm::terminal::size()?;
 
-    if ((window_size.0 as usize) < width + 2) || ((window_size.1 as usize) < height + 2) {
-        println!("Please resize the window to at least 40x25");
-        return Ok(());
-    }
     let board_offet = (
         window_size.0 as usize / 2 - width - 1,
         window_size.1 as usize / 2 - height / 2,
@@ -252,7 +295,7 @@ fn main() -> std::io::Result<()> {
         y: initial_positon.1 as u16,
     };
 
-    let mut next_piece: Piece = PIECES[rng.gen_range(0..6)].clone();
+    let mut next_piece: Piece = piece_bag.next();
 
     let mut next_board = Board {
         width: width + 2,
@@ -287,7 +330,10 @@ fn main() -> std::io::Result<()> {
 
     loop {
         let mut changed = false;
+        // Roughly eq to 60 frames per second, though in a terminal that makes little sense as
+        // keyboard repeat rate plays the biggest role in the speed of the game.
         if poll(std::time::Duration::from_millis(16))? {
+            let event = read()?;
             let new_level = (lines / 10) + 1;
             if new_level != level {
                 print_xy(
@@ -300,7 +346,6 @@ fn main() -> std::io::Result<()> {
                 level = new_level;
             }
 
-            let event = read()?;
             changed = match event {
                 Event::Key(KeyEvent {
                     kind: KeyEventKind::Press,
@@ -339,7 +384,7 @@ fn main() -> std::io::Result<()> {
                             x: initial_positon.0 as u16,
                             y: initial_positon.1 as u16,
                         };
-                        next_piece = PIECES[rng.gen_range(0..6)].clone();
+                        next_piece = piece_bag.next();
                         print_next_piece(&next_piece, &current_piece.piece);
                         if current_piece.collides(&next_board, current_piece.x, current_piece.y) {
                             break;
@@ -361,6 +406,7 @@ fn main() -> std::io::Result<()> {
             interval = 250;
         }
 
+        // Using unwrap here is safe because we know that the system time is always valid, if it's not, we have bigger problems.
         if last_tick.elapsed().unwrap().as_millis() > interval as u128 {
             last_tick = std::time::SystemTime::now();
             let success = current_piece.move_down(&current_board);
@@ -380,7 +426,7 @@ fn main() -> std::io::Result<()> {
                     x: initial_positon.0 as u16,
                     y: initial_positon.1 as u16,
                 };
-                next_piece = PIECES[rng.gen_range(0..6)].clone();
+                next_piece = piece_bag.next();
                 print_next_piece(&next_piece, &current_piece.piece);
                 if current_piece.collides(&next_board, current_piece.x, current_piece.y) {
                     break;

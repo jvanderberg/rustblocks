@@ -11,11 +11,11 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=rustris",
-                    "--package=rustris"
+                    "--bin=rustblocks",
+                    "--package=rustblocks"
                 ],
                 "filter": {
-                    "name": "rustris",
+                    "name": "rustblocks",
                     "kind": "bin"
                 }
             },
@@ -30,11 +30,11 @@
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=rustris",
-                    "--package=rustris"
+                    "--bin=rustblocks",
+                    "--package=rustblocks"
                 ],
                 "filter": {
-                    "name": "rustris",
+                    "name": "rustblocks",
                     "kind": "bin"
                 }
             },

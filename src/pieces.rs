@@ -4,6 +4,8 @@ pub struct Square {
     pub y: i32,
 }
 
+pub const BLOCK: &str = "\u{2588}\u{2588}";
+pub const EMPTY_BLOCK: &str = "  ";
 pub type PieceView = [Square; 4];
 #[derive(Clone)]
 pub enum Orientation {
@@ -57,28 +59,28 @@ pub const PIECES: [Piece; 7] = [
         color: 11,
         orientation: Orientation::Up,
         up: [
+            Square { x: 0, y: -1 },
+            Square { x: 1, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 1, y: 1 },
         ],
         right: [
+            Square { x: 0, y: -1 },
+            Square { x: 1, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 1, y: 1 },
         ],
         down: [
+            Square { x: 0, y: -1 },
+            Square { x: 1, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 1, y: 1 },
         ],
         left: [
+            Square { x: 0, y: -1 },
+            Square { x: 1, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 1, y: 1 },
         ],
     },
     // T Piece

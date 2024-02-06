@@ -52,8 +52,9 @@ impl Piece {
 }
 
 pub const PIECES: [Piece; 7] = [
+    // O piece
     Piece {
-        color: 1,
+        color: 11,
         orientation: Orientation::Up,
         up: [
             Square { x: 0, y: 0 },
@@ -80,8 +81,9 @@ pub const PIECES: [Piece; 7] = [
             Square { x: 1, y: 1 },
         ],
     },
+    // T Piece
     Piece {
-        color: 2,
+        color: 93,
         orientation: Orientation::Up,
         up: [
             Square { x: 0, y: 0 },
@@ -109,143 +111,148 @@ pub const PIECES: [Piece; 7] = [
         ],
     },
     Piece {
-        color: 3,
+        // I piece
+        color: 14,
         orientation: Orientation::Up,
         up: [
-            Square { x: 0, y: -1 },
-            Square { x: 0, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 0, y: 2 },
-        ],
-        right: [
             Square { x: -1, y: 0 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
             Square { x: 2, y: 0 },
         ],
+        right: [
+            Square { x: 1, y: -1 },
+            Square { x: 1, y: 0 },
+            Square { x: 1, y: 1 },
+            Square { x: 1, y: 2 },
+        ],
         down: [
+            Square { x: -1, y: 1 },
+            Square { x: 0, y: 1 },
+            Square { x: 1, y: 1 },
+            Square { x: 2, y: 1 },
+        ],
+        left: [
             Square { x: 0, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 0, y: 1 },
             Square { x: 0, y: 2 },
         ],
-        left: [
-            Square { x: -1, y: 0 },
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-            Square { x: 2, y: 0 },
-        ],
     },
     Piece {
-        color: 4,
+        // L piece
+        color: 208,
         orientation: Orientation::Up,
         up: [
-            Square { x: 0, y: -1 },
-            Square { x: 0, y: 0 },
-            Square { x: 0, y: 1 },
-            Square { x: 1, y: 1 },
-        ],
-        right: [
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-            Square { x: -1, y: 0 },
-            Square { x: -1, y: 1 },
-        ],
-        down: [
-            Square { x: -1, y: -1 },
-            Square { x: 0, y: -1 },
-            Square { x: 0, y: 0 },
-            Square { x: 0, y: 1 },
-        ],
-        left: [
             Square { x: -1, y: 0 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
             Square { x: 1, y: -1 },
         ],
-    },
-    Piece {
-        color: 5,
-        orientation: Orientation::Up,
-        up: [
+        right: [
             Square { x: 0, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 0, y: 1 },
+            Square { x: 1, y: 1 },
+        ],
+        down: [
+            Square { x: 0, y: 0 },
+            Square { x: 1, y: 0 },
+            Square { x: -1, y: 0 },
             Square { x: -1, y: 1 },
         ],
-        right: [
+        left: [
+            Square { x: -1, y: -1 },
+            Square { x: 0, y: -1 },
+            Square { x: 0, y: 0 },
+            Square { x: 0, y: 1 },
+        ],
+    },
+    Piece {
+        // J piece
+        color: 21,
+        orientation: Orientation::Up,
+        up: [
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
             Square { x: -1, y: 0 },
             Square { x: -1, y: -1 },
         ],
-        down: [
+        right: [
             Square { x: 1, y: -1 },
             Square { x: 0, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 0, y: 1 },
         ],
-        left: [
+        down: [
             Square { x: -1, y: 0 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
             Square { x: 1, y: 1 },
         ],
+        left: [
+            Square { x: 0, y: -1 },
+            Square { x: 0, y: 0 },
+            Square { x: 0, y: 1 },
+            Square { x: -1, y: 1 },
+        ],
     },
     Piece {
-        color: 6,
+        // S piece
+        color: 10,
         orientation: Orientation::Up,
         up: [
+            Square { x: -1, y: 0 },
+            Square { x: 0, y: 0 },
+            Square { x: 0, y: -1 },
+            Square { x: 1, y: -1 },
+        ],
+        right: [
             Square { x: 0, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
             Square { x: 1, y: 1 },
         ],
-        right: [
+        down: [
             Square { x: -1, y: 1 },
             Square { x: 0, y: 1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
         ],
-        down: [
+        left: [
+            Square { x: -1, y: -1 },
+            Square { x: -1, y: 0 },
+            Square { x: 0, y: 0 },
+            Square { x: 0, y: 1 },
+        ],
+    },
+    Piece {
+        // Z piece
+        color: 9,
+        orientation: Orientation::Up,
+        up: [
+            Square { x: -1, y: -1 },
             Square { x: 0, y: -1 },
             Square { x: 0, y: 0 },
             Square { x: 1, y: 0 },
+        ],
+        right: [
+            Square { x: 0, y: 1 },
+            Square { x: 0, y: 0 },
+            Square { x: 1, y: 0 },
+            Square { x: 1, y: -1 },
+        ],
+        down: [
+            Square { x: -1, y: 0 },
+            Square { x: 0, y: 0 },
+            Square { x: 0, y: 1 },
             Square { x: 1, y: 1 },
         ],
         left: [
             Square { x: -1, y: 1 },
-            Square { x: 0, y: 1 },
+            Square { x: -1, y: 0 },
             Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-        ],
-    },
-    Piece {
-        color: 8,
-        orientation: Orientation::Up,
-        up: [
-            Square { x: 0, y: 1 },
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-            Square { x: 1, y: -1 },
-        ],
-        right: [
-            Square { x: -1, y: -1 },
             Square { x: 0, y: -1 },
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-        ],
-        down: [
-            Square { x: 0, y: 1 },
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
-            Square { x: 1, y: -1 },
-        ],
-        left: [
-            Square { x: -1, y: -1 },
-            Square { x: 0, y: -1 },
-            Square { x: 0, y: 0 },
-            Square { x: 1, y: 0 },
         ],
     },
 ];

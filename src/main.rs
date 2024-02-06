@@ -7,7 +7,7 @@ use crossterm::{
     terminal, ExecutableCommand,
 };
 use rand::prelude::SliceRandom;
-use rand::Rng;
+
 const BLOCK: &str = "\u{2588}\u{2588}";
 use pieces::Piece;
 use pieces::PIECES;
@@ -58,7 +58,7 @@ impl CurrentPiece {
             }
             if y >= 0
                 && board.cells[x as usize][y as usize] > 0
-                && board.cells[x as usize][y as usize] < 255
+                && board.cells[x as usize][y as usize] < 254
             {
                 return true;
             }
@@ -158,7 +158,7 @@ fn draw_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: u8) {
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
         for x in 0..board.width {
-            if board.cells[x][y] == 255 {
+            if board.cells[x][y] >= 255 {
                 board.cells[x][y] = 0;
             }
         }
@@ -167,6 +167,32 @@ fn draw_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: u8) {
         let x = square.x + x as i32;
         let y = square.y + y as i32;
         board.cells[x as usize][y as usize] = color;
+    }
+}
+
+///
+/// Removes the tracer from the board.
+///
+fn remove_tracer(board: &mut Board) {
+    // Clear out the current position of the piece, if any.
+    for y in 0..board.height {
+        for x in 0..board.width {
+            if board.cells[x][y] == 254 {
+                board.cells[x][y] = 0;
+            }
+        }
+    }
+}
+///
+/// Draws the piece on the board.
+///
+fn draw_tracer(piece: &Piece, board: &mut Board, x: i32, y: i32) {
+    // Clear out the current position of the piece, if any.
+    remove_tracer(board);
+    for square in piece.view() {
+        let x = square.x + x as i32;
+        let y = square.y + y as i32;
+        board.cells[x as usize][y as usize] = 254;
     }
 }
 ///
@@ -196,6 +222,7 @@ fn draw_diff<'a>(
                     y as u16,
                     match next_board.cells[x][y] {
                         0 => Color::AnsiValue(0),
+                        254 => Color::AnsiValue(7),
                         255 => Color::AnsiValue(current_piece_color),
                         _ => Color::AnsiValue(next_board.cells[x][y]),
                     },
@@ -273,6 +300,7 @@ fn print_next_piece(piece: &Piece, last_piece: &Piece) {
     }
 }
 fn main() -> std::io::Result<()> {
+    let mut show_tracer = false;
     let mut piece_bag = Bag::new();
     let mut lines = 0;
     let mut level = 1;
@@ -357,6 +385,11 @@ fn main() -> std::io::Result<()> {
                     KeyCode::Right => current_piece.move_right(&current_board),
                     KeyCode::Up => current_piece.rotate_right(&current_board),
                     KeyCode::Down => current_piece.move_down(&current_board),
+                    KeyCode::Char('t') => {
+                        show_tracer = !show_tracer;
+
+                        true
+                    }
                     KeyCode::Char(' ') => {
                         while current_piece.move_down(&current_board) {
                             thread::sleep(std::time::Duration::from_millis(10));
@@ -443,6 +476,13 @@ fn main() -> std::io::Result<()> {
         } else {
             if changed {
                 draw_current_piece(&current_piece, &mut next_board);
+                if show_tracer {
+                    let mut tracer = current_piece.clone();
+                    while tracer.move_down(&next_board) {}
+                    draw_tracer(&tracer.piece, &mut next_board, tracer.x, tracer.y);
+                } else {
+                    remove_tracer(&mut next_board);
+                }
                 draw_diff(
                     &mut current_board,
                     &mut next_board,

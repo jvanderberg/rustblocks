@@ -1,4 +1,4 @@
-use std::io::stdout;
+use std::{io::stdout, thread};
 mod pieces;
 use crossterm::{
     cursor,
@@ -15,8 +15,8 @@ use pieces::PIECES;
 #[derive(Clone)]
 struct CurrentPiece {
     piece: Piece,
-    x: u16,
-    y: u16,
+    x: i32,
+    y: i32,
 }
 
 struct Bag {
@@ -49,7 +49,7 @@ struct Board {
 }
 
 impl CurrentPiece {
-    pub fn collides(&self, board: &Board, x: u16, y: u16) -> bool {
+    pub fn collides(&self, board: &Board, x: i32, y: i32) -> bool {
         for square in self.piece.view() {
             let x = square.x + x as i32;
             let y = square.y + y as i32;
@@ -154,7 +154,7 @@ fn draw_current_piece(current_piece: &CurrentPiece, board: &mut Board) {
 ///
 /// Draws the piece on the board.
 ///
-fn draw_piece(piece: &Piece, board: &mut Board, x: u16, y: u16, color: u8) {
+fn draw_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: u8) {
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
         for x in 0..board.width {
@@ -286,13 +286,12 @@ fn main() -> std::io::Result<()> {
         window_size.1 as usize / 2 - height / 2,
     );
 
-    let initial_positon = (width / 2, 2);
-    let mut rng = rand::thread_rng();
+    let initial_positon = ((width / 2) as i32, 2);
     let mut last_tick = std::time::SystemTime::now();
     let mut current_piece = CurrentPiece {
-        piece: PIECES[rng.gen_range(0..6)].clone(),
-        x: initial_positon.0 as u16,
-        y: initial_positon.1 as u16,
+        piece: piece_bag.next(),
+        x: initial_positon.0,
+        y: initial_positon.1,
     };
 
     let mut next_piece: Piece = piece_bag.next();
@@ -360,6 +359,7 @@ fn main() -> std::io::Result<()> {
                     KeyCode::Down => current_piece.move_down(&current_board),
                     KeyCode::Char(' ') => {
                         while current_piece.move_down(&current_board) {
+                            thread::sleep(std::time::Duration::from_millis(10));
                             draw_current_piece(&current_piece, &mut next_board);
                             draw_diff(
                                 &mut current_board,
@@ -381,8 +381,8 @@ fn main() -> std::io::Result<()> {
 
                         current_piece = CurrentPiece {
                             piece: next_piece,
-                            x: initial_positon.0 as u16,
-                            y: initial_positon.1 as u16,
+                            x: initial_positon.0,
+                            y: initial_positon.1,
                         };
                         next_piece = piece_bag.next();
                         print_next_piece(&next_piece, &current_piece.piece);
@@ -423,8 +423,8 @@ fn main() -> std::io::Result<()> {
 
                 current_piece = CurrentPiece {
                     piece: next_piece,
-                    x: initial_positon.0 as u16,
-                    y: initial_positon.1 as u16,
+                    x: initial_positon.0,
+                    y: initial_positon.1,
                 };
                 next_piece = piece_bag.next();
                 print_next_piece(&next_piece, &current_piece.piece);

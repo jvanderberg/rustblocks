@@ -1,6 +1,6 @@
 [package]
 name = "rustblocks"
-version = "0.2.0"
+version = "0.2.1"
 description = "A simple command line game where you try to clear as many blocks as possible"
 edition = "2021"
 authors = ["Josh Vanderberg jvanderberg@gmail.com"]

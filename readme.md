@@ -2,7 +2,7 @@
 
 Rustblocks is a simple tetromino based falling blocks game that uses crossterm to draw blocks in the terminal. A reasonable Unicode capable font is required as the character \u{2588} is used to draw the blocks.
 
-The game sticks roughly to 'offical' piece dynamics but does not implement 'kicking' off the walls. It is entirely single threaded, with no async.
+The game sticks roughly to 'official' piece dynamics but does not implement 'kicking' off the walls. It is entirely single threaded, with no async.
 
 For performance, the game maintains two board buffers, last and current. Pieces are always recorded on the current board, and when committed only the differences are drawn to the screen.
 

@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Square {
     pub x: i32,
     pub y: i32,
@@ -7,14 +7,14 @@ pub struct Square {
 pub const BLOCK: &str = "\u{2588}\u{2588}";
 pub const EMPTY_BLOCK: &str = "  ";
 pub type PieceView = [Square; 4];
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Orientation {
     Up,
     Right,
     Down,
     Left,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Piece {
     pub color: u8,
     pub orientation: Orientation,

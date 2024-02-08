@@ -1,12 +1,12 @@
 use crossterm::style::Color;
 
-use crate::print::print_xy;
+use crate::{gamestate::GameState, print::print_xy};
 
-pub fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32) {
-    let new_lines = lines + lines_cleared;
-    let new_level = (new_lines / 10) + 1;
+pub fn update_score(gs: &mut GameState, lines_cleared: i32) {
+    gs.lines = gs.lines + lines_cleared;
+    let new_level = (gs.lines / 10) + 1;
 
-    let new_score = score
+    gs.score = gs.score
         + match lines_cleared {
             1 => 100 * new_level,
             2 => 300 * new_level,
@@ -15,12 +15,17 @@ pub fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32)
             _ => 0,
         };
 
-    print_xy(3, 3, Color::AnsiValue(1), "Score", (0, 0));
+    let score_text = if gs.undo_used {
+        "Score (Undo Used)"
+    } else {
+        "Score"
+    };
+    print_xy(3, 3, Color::AnsiValue(1), score_text, (0, 0));
     print_xy(
         3,
         4,
         Color::AnsiValue(1),
-        format!("{}", new_score).as_str(),
+        format!("{}", gs.score).as_str(),
         (0, 0),
     );
     print_xy(3, 6, Color::AnsiValue(1), "Level", (0, 0));
@@ -36,11 +41,9 @@ pub fn calc_score(lines_cleared: i32, lines: i32, score: i32) -> (i32, i32, i32)
         3,
         10,
         Color::AnsiValue(1),
-        format!("{}", new_lines).as_str(),
+        format!("{}", gs.lines).as_str(),
         (0, 0),
     );
 
     print_xy(3, 12, Color::AnsiValue(1), "Next Piece", (0, 0));
-
-    (new_lines, new_score, new_level)
 }

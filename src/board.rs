@@ -2,9 +2,10 @@ use crossterm::style::Color;
 use rand::seq::SliceRandom;
 
 use crate::{
+    gamestate::GameState,
     pieces::{Piece, BLOCK, EMPTY_BLOCK, PIECES},
-    print::{print_next_piece, print_xy},
-    score::calc_score,
+    print::{print_next_piece, print_xy, remove_next_piece},
+    score::update_score,
 };
 
 #[derive(Clone)]
@@ -14,6 +15,7 @@ pub struct Board {
     pub cells: Vec<Vec<u8>>,
 }
 
+#[derive(Clone)]
 pub struct Bag {
     pieces: Vec<Piece>,
 }
@@ -35,15 +37,6 @@ impl Bag {
         // This is safe because we just checked the length.
         self.pieces.pop().unwrap()
     }
-
-    pub fn peek(&mut self) -> &Piece {
-        if self.pieces.len() == 0 {
-            self.pieces = PIECES.to_vec();
-            let mut rng = rand::thread_rng();
-            self.pieces.shuffle(&mut rng);
-        }
-        &self.pieces[self.pieces.len() - 1]
-    }
 }
 
 #[derive(Clone)]
@@ -56,15 +49,15 @@ pub struct CurrentPiece {
 ///
 /// Clears any lines that are full and moves the lines above down.
 ///
-pub fn clear_lines(board: &mut Board) -> i32 {
-    let mut y = board.height as usize - 2;
+pub fn clear_lines(gs: &mut GameState) -> i32 {
+    let mut y = gs.next_board.height as usize - 2;
     let mut lines = 0;
     while y > 0 {
-        if (0..board.width).all(|x| board.cells[x as usize][y] > 0) {
+        if (0..gs.next_board.width).all(|x| gs.next_board.cells[x as usize][y] > 0) {
             lines += 1;
             for y2 in (1..=y).rev() {
-                for x in 0..board.width {
-                    board.cells[x as usize][y2] = board.cells[x as usize][y2 - 1];
+                for x in 0..gs.next_board.width {
+                    gs.next_board.cells[x as usize][y2] = gs.next_board.cells[x as usize][y2 - 1];
                 }
             }
         } else {
@@ -75,7 +68,9 @@ pub fn clear_lines(board: &mut Board) -> i32 {
 }
 
 ///
-/// Draws the current piece on the board.
+/// Draws the current piece on the board, using the 'special' color 255.
+/// The 'draw_diff' function will then draw the piece in the correct color using the color
+/// the gs.current_piece
 ///
 pub fn commit_current_piece(current_piece: &CurrentPiece, board: &mut Board) {
     commit_piece(
@@ -120,7 +115,7 @@ pub fn remove_tracer(board: &mut Board) {
     }
 }
 ///
-/// Draws the piece on the board.
+/// Draws the tracer piece on the board.
 ///
 fn draw_tracer(piece: &Piece, board: &mut Board, x: i32, y: i32) {
     // Clear out the current position of the piece, if any.
@@ -135,7 +130,7 @@ fn draw_tracer(piece: &Piece, board: &mut Board, x: i32, y: i32) {
 /// Compares the current board with the next board and draws the differences.
 /// Copies changes from the next board to the current board, and then swaps the two boards.
 ///
-fn draw_diff<'a>(
+fn draw_diff(
     current_board: &mut Board,
     next_board: &mut Board,
     current_piece_color: u8,
@@ -174,17 +169,22 @@ fn draw_diff<'a>(
             }
         }
     }
-    std::mem::swap(next_board, current_board);
 }
 
-pub fn update_board(
-    current_piece: &CurrentPiece,
-    current_board: &mut Board,
-    next_board: &mut Board,
-    show_tracer: bool,
-    board_offet: (u16, u16),
-) {
+///
+/// Updates the board after a change
+///
+pub fn update_board(gs: &mut crate::gamestate::GameState, refresh_next_piece: bool) {
+    let (current_board, next_board, current_piece, board_offset, show_tracer) = (
+        &mut gs.current_board,
+        &mut gs.next_board,
+        &mut gs.current_piece,
+        gs.board_offset,
+        gs.show_tracer,
+    );
+
     commit_current_piece(&current_piece, next_board);
+
     if show_tracer {
         let mut tracer = current_piece.clone();
         while tracer.move_down(next_board) {}
@@ -196,8 +196,15 @@ pub fn update_board(
         current_board,
         next_board,
         current_piece.piece.color,
-        board_offet,
+        board_offset,
     );
+    if refresh_next_piece {
+        if gs.show_next_piece {
+            print_next_piece(&gs.next_piece, &gs.current_piece.piece);
+        } else {
+            remove_next_piece(&gs.next_piece);
+        }
+    }
 }
 
 impl CurrentPiece {
@@ -253,35 +260,37 @@ impl CurrentPiece {
     }
 }
 
-pub fn piece_hit_bottom(
-    current_piece: &mut CurrentPiece,
-    next_board: &mut Board,
-    next_piece: Piece,
-    lines: i32,
-    score: i32,
-    piece_bag: &mut Bag,
-    initial_positon: (i32, i32),
-) -> (CurrentPiece, Piece, i32, i32, i32) {
+///
+/// Handles the piece hitting the bottom of the board.
+/// This includes committing the piece to the board, clearing any lines, and updating the score.
+/// It also sets the next piece to the current piece and gets a new next piece from the piece bag, and
+/// prints the new next piece on the board.
+///
+
+pub fn piece_hit_bottom(gs: &mut GameState, backup_state: &mut GameState) {
+    // Touch up the backup state to reset the fallen piece to its original state
+    backup_state.current_piece = gs.current_piece.clone();
+    backup_state.current_piece.x = gs.initial_positon.0 as i32;
+    backup_state.current_piece.y = gs.initial_positon.1 as i32;
+
+    // Commit the piece to the board with it's actual color, not the '255' current piece color.
+    // This makes it 'permanent' on the board.
     commit_piece(
-        &current_piece.piece,
-        next_board,
-        current_piece.x,
-        current_piece.y,
-        current_piece.piece.color,
+        &gs.current_piece.piece,
+        &mut gs.next_board,
+        gs.current_piece.x,
+        gs.current_piece.y,
+        gs.current_piece.piece.color,
     );
+    gs.pieces += 1;
+    let lines = clear_lines(gs);
 
-    let (lines, score, level) = calc_score(clear_lines(next_board), lines, score);
+    update_score(gs, lines);
 
-    print_next_piece(&piece_bag.peek(), &next_piece);
-    (
-        CurrentPiece {
-            piece: next_piece,
-            x: initial_positon.0,
-            y: initial_positon.1,
-        },
-        piece_bag.next(),
-        lines,
-        score,
-        level,
-    )
+    gs.current_piece = CurrentPiece {
+        piece: gs.next_piece.clone(),
+        x: gs.initial_positon.0 as i32,
+        y: gs.initial_positon.1 as i32,
+    };
+    gs.next_piece = gs.piece_bag.next();
 }

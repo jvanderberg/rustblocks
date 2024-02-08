@@ -3,7 +3,7 @@ mod board;
 mod pieces;
 mod print;
 mod score;
-use board::{clear_lines, commit_piece, update_board, Bag, Board, CurrentPiece};
+use board::{clear_lines, piece_hit_bottom, update_board, Bag, Board, CurrentPiece};
 use clap::{arg, command, Parser};
 use crossterm::{
     cursor,
@@ -11,68 +11,41 @@ use crossterm::{
     terminal, ExecutableCommand,
 };
 use pieces::Piece;
-use print::{print_next_piece, print_startup};
+use print::{print_next_piece, print_startup, remove_next_piece};
 use score::calc_score;
 
-fn piece_hit_bottom(
-    current_piece: &mut CurrentPiece,
-    next_board: &mut Board,
-    next_piece: Piece,
-    lines: i32,
-    score: i32,
-    piece_bag: &mut Bag,
-    initial_positon: (i32, i32),
-) -> (CurrentPiece, Piece, i32, i32, i32) {
-    commit_piece(
-        &current_piece.piece,
-        next_board,
-        current_piece.x,
-        current_piece.y,
-        current_piece.piece.color,
-    );
-
-    let (lines, score, level) = calc_score(clear_lines(next_board), lines, score);
-
-    print_next_piece(&piece_bag.peek(), &next_piece);
-    (
-        CurrentPiece {
-            piece: next_piece,
-            x: initial_positon.0,
-            y: initial_positon.1,
-        },
-        piece_bag.next(),
-        lines,
-        score,
-        level,
-    )
-}
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None,)]
 struct Args {
     /// The width of the board
-    #[arg(short = 'w', long, default_value = "10")]
-    horizontal: u8,
+    #[arg(short = 'x', long, default_value = "10")]
+    horizontal: u16,
     /// The height of the board
-    #[arg(short, long, default_value = "22")]
-    vertical: u8,
+    #[arg(short = 'y', long, default_value = "22")]
+    vertical: u16,
+
+    /// Whether to show the next piece
+    #[arg(short = 'n', long, default_value = "false")]
+    hide_next_piece: bool,
 }
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
-    let width = args.horizontal as usize;
-    let height = args.vertical as usize;
+    let width = args.horizontal;
+    let height = args.vertical;
 
     let mut startup_screen = true;
     let mut show_tracer = false;
+    let mut show_next_piece = !args.hide_next_piece;
     let mut piece_bag = Bag::new();
     let mut lines = 0;
     let mut level = 1;
     let mut score = 0;
 
-    let window_size = crossterm::terminal::size()?;
+    let mut window_size: (u16, u16) = crossterm::terminal::size()?;
 
-    let board_offet = (
-        window_size.0 as usize / 2 - width - 1,
-        window_size.1 as usize / 2 - height / 2,
+    let mut board_offet: (u16, u16) = (
+        window_size.0 as u16 / 2 - width - 1,
+        window_size.1 as u16 / 2 - height / 2,
     );
 
     let initial_positon = ((width / 2) as i32, 2);
@@ -88,21 +61,21 @@ fn main() -> std::io::Result<()> {
     let mut next_board = Board {
         width: width + 2,
         height: height + 1,
-        cells: vec![vec![0; height + 1]; width + 2],
+        cells: vec![vec![0; (height + 1) as usize]; (width + 2) as usize],
     };
     let mut current_board = Board {
         width: width + 2,
         height: height + 1,
-        cells: vec![vec![0; height + 1]; width + 2],
+        cells: vec![vec![0; (height + 1) as usize]; (width + 2) as usize],
     };
 
     for i in 0..next_board.width {
-        next_board.cells[i][next_board.height - 1] = 8;
+        next_board.cells[i as usize][next_board.height.saturating_sub(1) as usize] = 8;
     }
 
     for i in 0..height {
-        next_board.cells[0][i] = 8;
-        next_board.cells[next_board.width - 1][i] = 8;
+        next_board.cells[0][i as usize] = 8;
+        next_board.cells[(next_board.width.saturating_sub(1)) as usize][i as usize] = 8;
     }
     terminal::enable_raw_mode()?;
     let _ = stdout()
@@ -114,7 +87,37 @@ fn main() -> std::io::Result<()> {
     loop {
         // Indicates if the board has changed and needs to be redrawn.
         let mut changed = false;
+        let new_window_size = crossterm::terminal::size()?;
+        if new_window_size != window_size {
+            window_size = new_window_size;
+            board_offet = (
+                (window_size.0 as usize / 2).saturating_sub(width as usize + 1) as u16,
+                (window_size.1 as usize / 2).saturating_sub(height as usize / 2) as u16,
+            );
+            let _ = stdout()
+                .execute(terminal::Clear(terminal::ClearType::All))
+                .unwrap();
+            current_board = Board {
+                width: width + 2,
+                height: height + 1,
+                cells: vec![vec![0; height as usize + 1]; width as usize + 2],
+            };
+            update_board(
+                &current_piece,
+                &mut current_board,
+                &mut next_board,
+                show_tracer,
+                board_offet,
+            );
+            (lines, score, level) = calc_score(clear_lines(&mut next_board), lines, score);
+            if show_next_piece {
+                print_next_piece(&next_piece, &current_piece.piece);
+            } else {
+                remove_next_piece(&next_piece);
+            }
 
+            continue;
+        }
         // Roughly eq to 60 frames per second, though in a terminal that makes little sense as
         // keyboard repeat rate plays the biggest role in the speed of the game.
         if poll(std::time::Duration::from_millis(16))? {
@@ -132,7 +135,11 @@ fn main() -> std::io::Result<()> {
                     board_offet,
                 );
                 (lines, score, level) = calc_score(clear_lines(&mut next_board), lines, score);
-                print_next_piece(&next_piece, &current_piece.piece);
+                if show_next_piece {
+                    print_next_piece(&next_piece, &current_piece.piece);
+                } else {
+                    remove_next_piece(&next_piece);
+                }
 
                 continue;
             }
@@ -163,6 +170,10 @@ fn main() -> std::io::Result<()> {
                     }
                     KeyCode::Char('T') | KeyCode::Char('t') => {
                         show_tracer = !show_tracer;
+                        true
+                    }
+                    KeyCode::Char('N') | KeyCode::Char('n') => {
+                        show_next_piece = !show_next_piece;
                         true
                     }
                     KeyCode::Char(' ') => {
@@ -240,6 +251,11 @@ fn main() -> std::io::Result<()> {
                 show_tracer,
                 board_offet,
             );
+            if show_next_piece {
+                print_next_piece(&next_piece, &current_piece.piece);
+            } else {
+                remove_next_piece(&next_piece);
+            }
         }
     }
     terminal::disable_raw_mode()?;

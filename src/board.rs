@@ -3,13 +3,14 @@ use rand::seq::SliceRandom;
 
 use crate::{
     pieces::{Piece, BLOCK, EMPTY_BLOCK, PIECES},
-    print::print_xy,
+    print::{print_next_piece, print_xy},
+    score::calc_score,
 };
 
 #[derive(Clone)]
 pub struct Board {
-    pub width: usize,
-    pub height: usize,
+    pub width: u16,
+    pub height: u16,
     pub cells: Vec<Vec<u8>>,
 }
 
@@ -56,14 +57,14 @@ pub struct CurrentPiece {
 /// Clears any lines that are full and moves the lines above down.
 ///
 pub fn clear_lines(board: &mut Board) -> i32 {
-    let mut y = board.height - 2;
+    let mut y = board.height as usize - 2;
     let mut lines = 0;
     while y > 0 {
-        if (0..board.width).all(|x| board.cells[x][y] > 0) {
+        if (0..board.width).all(|x| board.cells[x as usize][y] > 0) {
             lines += 1;
             for y2 in (1..=y).rev() {
                 for x in 0..board.width {
-                    board.cells[x][y2] = board.cells[x][y2 - 1];
+                    board.cells[x as usize][y2] = board.cells[x as usize][y2 - 1];
                 }
             }
         } else {
@@ -93,8 +94,8 @@ pub fn commit_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: u8)
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
         for x in 0..board.width {
-            if board.cells[x][y] >= 255 {
-                board.cells[x][y] = 0;
+            if board.cells[x as usize][y as usize] >= 255 {
+                board.cells[x as usize][y as usize] = 0;
             }
         }
     }
@@ -112,8 +113,8 @@ pub fn remove_tracer(board: &mut Board) {
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
         for x in 0..board.width {
-            if board.cells[x][y] == 254 {
-                board.cells[x][y] = 0;
+            if board.cells[x as usize][y as usize] == 254 {
+                board.cells[x as usize][y as usize] = 0;
             }
         }
     }
@@ -138,11 +139,13 @@ fn draw_diff<'a>(
     current_board: &mut Board,
     next_board: &mut Board,
     current_piece_color: u8,
-    board_offset: (usize, usize),
+    board_offset: (u16, u16),
 ) {
     for y in 0..next_board.height {
         for x in 0..next_board.width {
-            if (current_board.cells[x][y] > 0) && (next_board.cells[x][y] == 0) {
+            if (current_board.cells[x as usize][y as usize] > 0)
+                && (next_board.cells[x as usize][y as usize] == 0)
+            {
                 print_xy(
                     x as u16 * 2,
                     y as u16,
@@ -150,21 +153,24 @@ fn draw_diff<'a>(
                     EMPTY_BLOCK,
                     board_offset,
                 );
-                current_board.cells[x][y] = 0;
-            } else if current_board.cells[x][y] != next_board.cells[x][y] {
+                current_board.cells[x as usize][y as usize] = 0;
+            } else if current_board.cells[x as usize][y as usize]
+                != next_board.cells[x as usize][y as usize]
+            {
                 print_xy(
                     x as u16 * 2,
                     y as u16,
-                    match next_board.cells[x][y] {
+                    match next_board.cells[x as usize][y as usize] {
                         0 => Color::AnsiValue(0),
                         254 => Color::AnsiValue(7),
                         255 => Color::AnsiValue(current_piece_color),
-                        _ => Color::AnsiValue(next_board.cells[x][y]),
+                        _ => Color::AnsiValue(next_board.cells[x as usize][y as usize]),
                     },
                     BLOCK,
                     board_offset,
                 );
-                current_board.cells[x][y] = next_board.cells[x][y];
+                current_board.cells[x as usize][y as usize] =
+                    next_board.cells[x as usize][y as usize];
             }
         }
     }
@@ -176,7 +182,7 @@ pub fn update_board(
     current_board: &mut Board,
     next_board: &mut Board,
     show_tracer: bool,
-    board_offet: (usize, usize),
+    board_offet: (u16, u16),
 ) {
     commit_current_piece(&current_piece, next_board);
     if show_tracer {
@@ -245,4 +251,37 @@ impl CurrentPiece {
         }
         false
     }
+}
+
+pub fn piece_hit_bottom(
+    current_piece: &mut CurrentPiece,
+    next_board: &mut Board,
+    next_piece: Piece,
+    lines: i32,
+    score: i32,
+    piece_bag: &mut Bag,
+    initial_positon: (i32, i32),
+) -> (CurrentPiece, Piece, i32, i32, i32) {
+    commit_piece(
+        &current_piece.piece,
+        next_board,
+        current_piece.x,
+        current_piece.y,
+        current_piece.piece.color,
+    );
+
+    let (lines, score, level) = calc_score(clear_lines(next_board), lines, score);
+
+    print_next_piece(&piece_bag.peek(), &next_piece);
+    (
+        CurrentPiece {
+            piece: next_piece,
+            x: initial_positon.0,
+            y: initial_positon.1,
+        },
+        piece_bag.next(),
+        lines,
+        score,
+        level,
+    )
 }

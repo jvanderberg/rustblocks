@@ -10,7 +10,7 @@ use std::io::stdout;
 ///
 /// Prints the text at the given position with the given color.
 ///
-pub fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, usize)) {
+pub fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (u16, u16)) {
     // Here we use unwrap, because really we want to crash if we can't display anything
     let _ = stdout()
         .execute(cursor::MoveTo(
@@ -23,19 +23,23 @@ pub fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (usize, 
         .execute(Print(text));
 }
 
-///
-/// Print the next piece in the upper left
-///
-pub fn print_next_piece(piece: &Piece, last_piece: &Piece) {
+pub fn remove_next_piece(last_piece: &Piece) {
     for square in last_piece.view() {
         print_xy(
             ((square.x + 2) * 2) as u16,
             (square.y + 2) as u16,
-            Color::AnsiValue(piece.color),
+            Color::AnsiValue(1),
             EMPTY_BLOCK,
             (3, 13),
         );
     }
+}
+
+///
+/// Print the next piece in the upper left
+///
+pub fn print_next_piece(piece: &Piece, last_piece: &Piece) {
+    remove_next_piece(last_piece);
     for square in piece.view() {
         print_xy(
             ((square.x + 2) * 2) as u16,
@@ -54,8 +58,8 @@ static STARTUP_MESSAGE: [&str; 18] = [
     "Keys: Arrow keys or h,j,k,l to move",
     "      space to drop",
     "      q to quit",
+    "      n to toggle next piece display",
     "      t key toggles the tracer block",
-    "",
     "",
     "",
     "",

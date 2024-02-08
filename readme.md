@@ -10,6 +10,7 @@ Controls:
 - Arrow keys or h,j,k,l to move
 - space to drop
 - q to quit
+- n to toggle next piece display
 - t key toggles the tracer block
 
 
@@ -21,8 +22,9 @@ Controls:
 Usage: rustblocks [OPTIONS]
 
 Options:
-  -w, --horizontal <HORIZONTAL>  The width of the board [default: 10]
-  -v, --vertical <VERTICAL>      The height of the board [default: 22]
+  -x, --horizontal <HORIZONTAL>  The width of the board [default: 10]
+  -y, --vertical <VERTICAL>      The height of the board [default: 22]
+  -n, --hide-next-piece          Whether to show the next piece
   -h, --help                     Print help
   -V, --version                  Print version
 

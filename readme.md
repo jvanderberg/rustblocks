@@ -7,11 +7,20 @@ The game sticks roughly to 'official' piece dynamics but does not implement 'kic
 For performance, the game maintains two board buffers, last and current. Pieces are always recorded on the current board, and when committed only the differences are drawn to the screen.
 
 Controls: 
-- Arrow keys or h,j,k,l to move
-- space to drop
-- q to quit
-- n to toggle next piece display
-- t key toggles the tracer block
+
+    - Arrow keys or h,j,k,l to move
+    - space to drop
+    - Delete or Backspace to restart
+    - d toggle difficulty
+    - q to quit
+    - u to undo
+    - n to toggle next piece display
+    - t key toggles the tracer block
+
+
+
+
+
 
 
 ### Running rustblocks
@@ -25,6 +34,7 @@ Options:
   -x, --horizontal <HORIZONTAL>  The width of the board [default: 10]
   -y, --vertical <VERTICAL>      The height of the board [default: 22]
   -n, --hide-next-piece          Whether to show the next piece
+  -d, --difficulty <DIFFICULTY>  The difficulty of the game, changes the speed of the game. Easy, Medium, Hard, Insane, or 1, 2, 3, 4 [default: Easy]
   -h, --help                     Print help
   -V, --version                  Print version
 

@@ -1,8 +1,10 @@
-use crossterm::style::Color;
+use std::io::stdout;
+
+use crossterm::{cursor, style::Color, terminal, ExecutableCommand};
 use rand::seq::SliceRandom;
 
 use crate::{
-    gamestate::GameState,
+    gamestate::{Difficulty, GameState},
     pieces::{Piece, BLOCK, EMPTY_BLOCK, PIECES},
     print::{print_next_piece, print_xy, remove_next_piece},
     score::update_score,
@@ -39,7 +41,7 @@ impl Bag {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CurrentPiece {
     pub piece: Piece,
     pub x: i32,
@@ -175,27 +177,20 @@ fn draw_diff(
 /// Updates the board after a change
 ///
 pub fn update_board(gs: &mut crate::gamestate::GameState, refresh_next_piece: bool) {
-    let (current_board, next_board, current_piece, board_offset, show_tracer) = (
+    commit_current_piece(&gs.current_piece, &mut gs.next_board);
+
+    if gs.show_tracer {
+        let mut tracer = gs.current_piece.clone();
+        while tracer.move_down(&gs.next_board) {}
+        draw_tracer(&tracer.piece, &mut gs.next_board, tracer.x, tracer.y);
+    } else {
+        remove_tracer(&mut gs.next_board);
+    }
+    let board_offset = gs.get_board_offset();
+    draw_diff(
         &mut gs.current_board,
         &mut gs.next_board,
-        &mut gs.current_piece,
-        gs.board_offset,
-        gs.show_tracer,
-    );
-
-    commit_current_piece(&current_piece, next_board);
-
-    if show_tracer {
-        let mut tracer = current_piece.clone();
-        while tracer.move_down(next_board) {}
-        draw_tracer(&tracer.piece, next_board, tracer.x, tracer.y);
-    } else {
-        remove_tracer(next_board);
-    }
-    draw_diff(
-        current_board,
-        next_board,
-        current_piece.piece.color,
+        gs.current_piece.piece.color,
         board_offset,
     );
     if refresh_next_piece {
@@ -270,8 +265,8 @@ impl CurrentPiece {
 pub fn piece_hit_bottom(gs: &mut GameState, backup_state: &mut GameState) {
     // Touch up the backup state to reset the fallen piece to its original state
     backup_state.current_piece = gs.current_piece.clone();
-    backup_state.current_piece.x = gs.initial_positon.0 as i32;
-    backup_state.current_piece.y = gs.initial_positon.1 as i32;
+    backup_state.current_piece.x = gs.get_initial_position().0 as i32;
+    backup_state.current_piece.y = gs.get_initial_position().1 as i32;
 
     // Commit the piece to the board with it's actual color, not the '255' current piece color.
     // This makes it 'permanent' on the board.
@@ -289,8 +284,82 @@ pub fn piece_hit_bottom(gs: &mut GameState, backup_state: &mut GameState) {
 
     gs.current_piece = CurrentPiece {
         piece: gs.next_piece.clone(),
-        x: gs.initial_positon.0 as i32,
-        y: gs.initial_positon.1 as i32,
+        x: gs.get_initial_position().0 as i32,
+        y: gs.get_initial_position().1 as i32,
     };
     gs.next_piece = gs.piece_bag.next();
+}
+
+pub fn hide_cursor() {
+    stdout().execute(cursor::Hide).unwrap();
+}
+
+pub fn show_cursor() {
+    stdout().execute(cursor::Show).unwrap();
+}
+pub fn clear_board() {
+    stdout()
+        .execute(terminal::Clear(terminal::ClearType::All))
+        .unwrap();
+}
+
+pub fn refresh_board(gs: &mut GameState) {
+    clear_board();
+
+    gs.current_board = Board {
+        width: gs.width + 2,
+        height: gs.height + 1,
+        cells: vec![vec![0; gs.height as usize + 1]; gs.width as usize + 2],
+    };
+    update_board(gs, true);
+    update_score(gs, 0);
+}
+
+pub fn initialize_board_pieces(gs: &mut GameState) {
+    // Based on the difficulty, we want to introduce some random pieces, move them randomly, and drop them
+    // to make the game more interesting.
+
+    let extra_pieces = match gs.difficulty {
+        Difficulty::Easy | Difficulty::Medium => 0,
+        Difficulty::Hard => 5,
+        Difficulty::Insane => 10,
+    };
+    for _i in 0..extra_pieces {
+        let mut piece: CurrentPiece = CurrentPiece {
+            piece: gs.piece_bag.next().clone(),
+            x: gs.get_initial_position().0 as i32,
+            y: gs.get_initial_position().1 as i32,
+        };
+
+        piece.rotate_right(&gs.next_board);
+        // Randomly move the piece left or right
+        let int = rand::random::<i32>() % (gs.width - gs.width / 2) as i32;
+        if int > 0 {
+            for _ in 0..int {
+                piece.move_left(&gs.next_board);
+            }
+        } else {
+            for _ in 0..int.abs() {
+                piece.move_right(&gs.next_board);
+            }
+        }
+
+        while piece.move_down(&gs.next_board) {}
+        commit_piece(
+            &piece.piece,
+            &mut gs.next_board,
+            piece.x,
+            piece.y,
+            piece.piece.color,
+        );
+    }
+
+    for i in 0..gs.next_board.width {
+        gs.next_board.cells[i as usize][gs.next_board.height.saturating_sub(1) as usize] = 8;
+    }
+
+    for i in 0..gs.height {
+        gs.next_board.cells[0][i as usize] = 8;
+        gs.next_board.cells[(gs.next_board.width.saturating_sub(1)) as usize][i as usize] = 8;
+    }
 }

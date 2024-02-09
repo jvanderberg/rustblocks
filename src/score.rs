@@ -15,6 +15,20 @@ pub fn update_score(gs: &mut GameState, lines_cleared: i32) {
             _ => 0,
         };
 
+    print_xy(
+        3,
+        1,
+        Color::AnsiValue(1),
+        gs.difficulty.to_string().as_str(),
+        (0, 0),
+    );
+    print_xy(
+        3 + gs.difficulty.to_string().len() as u16 + 1,
+        1,
+        Color::AnsiValue(1),
+        "Mode",
+        (0, 0),
+    );
     let score_text = if gs.undo_used {
         "Score (Undo Used)"
     } else {

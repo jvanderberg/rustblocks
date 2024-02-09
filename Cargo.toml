@@ -1,6 +1,6 @@
 [package]
 name = "rustblocks"
-version = "0.2.2"
+version = "0.3.0"
 description = "Rustblocks is a simple tetromino based falling blocks game"
 edition = "2021"
 authors = ["Josh Vanderberg jvanderberg@gmail.com"]

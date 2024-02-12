@@ -1,13 +1,8 @@
-use std::io::stdout;
-
-use crossterm::{cursor, style::Color, terminal, ExecutableCommand};
 use rand::seq::SliceRandom;
 
 use crate::{
     gamestate::{Difficulty, GameState},
-    pieces::{Piece, BLOCK, EMPTY_BLOCK, PIECES},
-    print::{print_next_piece, print_xy, remove_next_piece},
-    score::update_score,
+    pieces::{Piece, PIECES},
 };
 
 #[derive(Clone)]
@@ -52,14 +47,14 @@ pub struct CurrentPiece {
 /// Clears any lines that are full and moves the lines above down.
 ///
 pub fn clear_lines(gs: &mut GameState) -> i32 {
-    let mut y = gs.next_board.height as usize - 2;
+    let mut y = gs.board.height as usize - 2;
     let mut lines = 0;
     while y > 0 {
-        if (0..gs.next_board.width).all(|x| gs.next_board.cells[x as usize][y] > 0) {
+        if (0..gs.board.width).all(|x| gs.board.cells[x as usize][y] > 0) {
             lines += 1;
             for y2 in (1..=y).rev() {
-                for x in 0..gs.next_board.width {
-                    gs.next_board.cells[x as usize][y2] = gs.next_board.cells[x as usize][y2 - 1];
+                for x in 0..gs.board.width {
+                    gs.board.cells[x as usize][y2] = gs.board.cells[x as usize][y2 - 1];
                 }
             }
         } else {
@@ -129,76 +124,17 @@ fn draw_tracer(piece: &Piece, board: &mut Board, x: i32, y: i32) {
     }
 }
 ///
-/// Compares the current board with the next board and draws the differences.
-/// Copies changes from the next board to the current board, and then swaps the two boards.
-///
-fn draw_diff(
-    current_board: &mut Board,
-    next_board: &mut Board,
-    current_piece_color: u8,
-    board_offset: (u16, u16),
-) {
-    for y in 0..next_board.height {
-        for x in 0..next_board.width {
-            if (current_board.cells[x as usize][y as usize] > 0)
-                && (next_board.cells[x as usize][y as usize] == 0)
-            {
-                print_xy(
-                    x as u16 * 2,
-                    y as u16,
-                    Color::AnsiValue(0),
-                    EMPTY_BLOCK,
-                    board_offset,
-                );
-                current_board.cells[x as usize][y as usize] = 0;
-            } else if current_board.cells[x as usize][y as usize]
-                != next_board.cells[x as usize][y as usize]
-            {
-                print_xy(
-                    x as u16 * 2,
-                    y as u16,
-                    match next_board.cells[x as usize][y as usize] {
-                        0 => Color::AnsiValue(0),
-                        254 => Color::AnsiValue(7),
-                        255 => Color::AnsiValue(current_piece_color),
-                        _ => Color::AnsiValue(next_board.cells[x as usize][y as usize]),
-                    },
-                    BLOCK,
-                    board_offset,
-                );
-                current_board.cells[x as usize][y as usize] =
-                    next_board.cells[x as usize][y as usize];
-            }
-        }
-    }
-}
-
-///
 /// Updates the board after a change
 ///
-pub fn update_board(gs: &mut crate::gamestate::GameState, refresh_next_piece: bool) {
-    commit_current_piece(&gs.current_piece, &mut gs.next_board);
+pub fn update_board(gs: &mut crate::gamestate::GameState) {
+    commit_current_piece(&gs.current_piece, &mut gs.board);
 
     if gs.show_tracer {
         let mut tracer = gs.current_piece.clone();
-        while tracer.move_down(&gs.next_board) {}
-        draw_tracer(&tracer.piece, &mut gs.next_board, tracer.x, tracer.y);
+        while tracer.move_down(&gs.board) {}
+        draw_tracer(&tracer.piece, &mut gs.board, tracer.x, tracer.y);
     } else {
-        remove_tracer(&mut gs.next_board);
-    }
-    let board_offset = gs.get_board_offset();
-    draw_diff(
-        &mut gs.current_board,
-        &mut gs.next_board,
-        gs.current_piece.piece.color,
-        board_offset,
-    );
-    if refresh_next_piece {
-        if gs.show_next_piece {
-            print_next_piece(&gs.next_piece, &gs.current_piece.piece);
-        } else {
-            remove_next_piece(&gs.next_piece);
-        }
+        remove_tracer(&mut gs.board);
     }
 }
 
@@ -262,17 +198,12 @@ impl CurrentPiece {
 /// prints the new next piece on the board.
 ///
 
-pub fn piece_hit_bottom(gs: &mut GameState, backup_state: &mut GameState) {
-    // Touch up the backup state to reset the fallen piece to its original state
-    backup_state.current_piece = gs.current_piece.clone();
-    backup_state.current_piece.x = gs.get_initial_position().0 as i32;
-    backup_state.current_piece.y = gs.get_initial_position().1 as i32;
-
+pub fn piece_hit_bottom(gs: &mut GameState) -> i32 {
     // Commit the piece to the board with it's actual color, not the '255' current piece color.
     // This makes it 'permanent' on the board.
     commit_piece(
         &gs.current_piece.piece,
-        &mut gs.next_board,
+        &mut gs.board,
         gs.current_piece.x,
         gs.current_piece.y,
         gs.current_piece.piece.color,
@@ -280,40 +211,26 @@ pub fn piece_hit_bottom(gs: &mut GameState, backup_state: &mut GameState) {
     gs.pieces += 1;
     let lines = clear_lines(gs);
 
-    update_score(gs, lines);
-
     gs.current_piece = CurrentPiece {
         piece: gs.next_piece.clone(),
         x: gs.get_initial_position().0 as i32,
         y: gs.get_initial_position().1 as i32,
     };
     gs.next_piece = gs.piece_bag.next();
+    return lines;
 }
 
-pub fn hide_cursor() {
-    stdout().execute(cursor::Hide).unwrap();
-}
+// pub fn refresh_board(gs: &mut GameState) {
+//     // clear_board();
 
-pub fn show_cursor() {
-    stdout().execute(cursor::Show).unwrap();
-}
-pub fn clear_board() {
-    stdout()
-        .execute(terminal::Clear(terminal::ClearType::All))
-        .unwrap();
-}
-
-pub fn refresh_board(gs: &mut GameState) {
-    clear_board();
-
-    gs.current_board = Board {
-        width: gs.width + 2,
-        height: gs.height + 1,
-        cells: vec![vec![0; gs.height as usize + 1]; gs.width as usize + 2],
-    };
-    update_board(gs, true);
-    update_score(gs, 0);
-}
+//     // gs.current_board = Board {
+//     //     width: gs.width + 2,
+//     //     height: gs.height + 1,
+//     //     cells: vec![vec![0; gs.height as usize + 1]; gs.width as usize + 2],
+//     // };
+//     update_board(gs);
+//     // update_score(gs, 0);
+// }
 
 pub fn initialize_board_pieces(gs: &mut GameState) {
     // Based on the difficulty, we want to introduce some random pieces, move them randomly, and drop them
@@ -331,35 +248,36 @@ pub fn initialize_board_pieces(gs: &mut GameState) {
             y: gs.get_initial_position().1 as i32,
         };
 
-        piece.rotate_right(&gs.next_board);
+        piece.rotate_right(&gs.board);
         // Randomly move the piece left or right
         let int = rand::random::<i32>() % (gs.width - gs.width / 2) as i32;
         if int > 0 {
             for _ in 0..int {
-                piece.move_left(&gs.next_board);
+                piece.move_left(&gs.board);
             }
         } else {
             for _ in 0..int.abs() {
-                piece.move_right(&gs.next_board);
+                piece.move_right(&gs.board);
             }
         }
 
-        while piece.move_down(&gs.next_board) {}
+        while piece.move_down(&gs.board) {}
         commit_piece(
             &piece.piece,
-            &mut gs.next_board,
+            &mut gs.board,
             piece.x,
             piece.y,
             piece.piece.color,
         );
+        update_board(gs);
     }
 
-    for i in 0..gs.next_board.width {
-        gs.next_board.cells[i as usize][gs.next_board.height.saturating_sub(1) as usize] = 8;
+    for i in 0..gs.board.width {
+        gs.board.cells[i as usize][gs.board.height.saturating_sub(1) as usize] = 8;
     }
 
     for i in 0..gs.height {
-        gs.next_board.cells[0][i as usize] = 8;
-        gs.next_board.cells[(gs.next_board.width.saturating_sub(1)) as usize][i as usize] = 8;
+        gs.board.cells[0][i as usize] = 8;
+        gs.board.cells[(gs.board.width.saturating_sub(1)) as usize][i as usize] = 8;
     }
 }

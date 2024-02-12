@@ -2,52 +2,16 @@ mod board;
 mod gamestate;
 mod pieces;
 mod print;
-use std::cell::RefCell;
-use std::rc::Rc;
 
-use board::initialize_board_pieces;
 use clap::Parser;
 use clap::{arg, command};
 use crossterm::{
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal,
 };
-use gamestate::{Difficulty, GameEvent, GameState};
+use gamestate::{Difficulty, GameState};
 use print::{hide_cursor, print_startup, show_cursor};
 
-// macro_rules! event_handler {
-//     ($renderer:expr, $gs: expr, $terminal_renderer:expr) => {
-//         let event_handler = move |ge: &GameEvent, gs: &GameState| {
-//             let tr = $terminal_renderer.clone();
-//             match ge {
-//                 GameEvent::ScoreChanged
-//                 | GameEvent::LinesClearedChanged
-//                 | GameEvent::LevelChanged
-//                 | GameEvent::GameStarted => {
-//                     tr.borrow_mut().print_score(&gs);
-//                 }
-//                 GameEvent::PieceChanged => {
-//                     tr.borrow_mut()
-//                         .draw_next_piece(&gs.next_piece, gs.show_next_piece);
-//                     tr.borrow_mut()
-//                         .draw_board(&gs.board, gs.current_piece.piece.color);
-//                 }
-//                 _ => {
-//                     tr.borrow_mut()
-//                         .draw_board(&gs.board, gs.current_piece.piece.color);
-//                 }
-//             }
-//         };
-//         $terminal_renderer = Rc::clone(&$renderer);
-//         $gs.add_event_handler(event_handler);
-//     };
-// }
-
-macro_rules! refresh_board {
-    ( $gs: expr, $terminal_renderer:expr) => {
-        $terminal_renderer.refresh_board(&$gs.board, $gs.current_piece.piece.color);
-    };
-}
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None,)]
 pub struct Args {
@@ -85,7 +49,7 @@ fn main() -> std::io::Result<()> {
 
     // event_handler!(renderer, gs, terminal_renderer);
     gs.add_event_handler(Box::new(tr.clone()));
-    initialize_board_pieces(&mut gs);
+    gs.initialize_board_pieces();
     let mut backup_state = gs.clone();
 
     let mut last_tick = std::time::SystemTime::now();
@@ -102,8 +66,7 @@ fn main() -> std::io::Result<()> {
         let window_size = tr.get_window_size();
         if new_window_size != window_size {
             tr.set_window_size(new_window_size);
-            refresh_board!(gs, tr);
-            tr.print_score(&gs);
+            tr.refresh_board(&gs);
         }
         // Roughly eq to 60 frames per second, though in a terminal that makes little sense as
         // keyboard repeat rate plays the biggest role in the speed of the game.
@@ -111,14 +74,9 @@ fn main() -> std::io::Result<()> {
             let event = read()?;
             if gs.startup_screen {
                 gs.startup_screen = false;
-                refresh_board!(gs, tr);
+                tr.refresh_board(&gs);
                 gs.start();
                 continue;
-            }
-
-            let new_level = (gs.lines / 10) + 1;
-            if new_level != gs.level {
-                gs.level = new_level;
             }
 
             match event {
@@ -148,12 +106,12 @@ fn main() -> std::io::Result<()> {
                         gs.startup_screen = false;
 
                         gs.add_event_handler(Box::new(tr.clone()));
-                        initialize_board_pieces(&mut gs);
+                        gs.initialize_board_pieces();
                         gs.startup_screen = false;
                         last_tick = std::time::SystemTime::now();
 
                         backup_state = gs.clone();
-                        refresh_board!(gs, tr);
+                        tr.refresh_board(&gs);
                         gs.start();
                         continue;
                     }
@@ -165,10 +123,6 @@ fn main() -> std::io::Result<()> {
                         gs = gs.restore(&backup_state);
                         gs.add_event_handler(Box::new(tr.clone()));
                         gs.start();
-                        // refresh_board!(gs, tr);
-                        // tr.print_score(&gs);
-                        // tr.draw_next_piece(&gs.next_piece, gs.show_next_piece);
-
                         true
                     }
                     KeyCode::Backspace | KeyCode::Delete => {
@@ -180,9 +134,8 @@ fn main() -> std::io::Result<()> {
                         );
                         gs.startup_screen = false;
                         gs.add_event_handler(Box::new(tr.clone()));
-                        //event_handler!(renderer, gs, terminal_renderer);
-                        initialize_board_pieces(&mut gs);
-                        refresh_board!(gs, tr);
+                        gs.initialize_board_pieces();
+                        tr.refresh_board(&gs);
 
                         last_tick = std::time::SystemTime::now();
 

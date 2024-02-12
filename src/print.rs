@@ -1,16 +1,16 @@
+use crate::pieces::{xy, Piece, PIECES};
 use crate::{
     board::Board,
     gamestate::{EventHandler, GameEvent, GameState},
-    pieces::{self, EMPTY_BLOCK},
 };
 use crossterm::{
     cursor,
     style::{Color, Print, SetForegroundColor},
     terminal, ExecutableCommand,
 };
-use pieces::{Piece, BLOCK};
 use std::{cell::RefCell, io::stdout, rc::Rc};
-
+pub const BLOCK: &str = "\u{2588}\u{2588}";
+pub const EMPTY_BLOCK: &str = "  ";
 #[derive(Clone, Default)]
 
 struct TerminalRendererState {
@@ -28,12 +28,10 @@ impl EventHandler for TerminalRenderer {
     fn handle_event(&mut self, gs: &GameState, ge: &GameEvent) {
         match ge {
             GameEvent::ScoreChanged | GameEvent::LinesClearedChanged | GameEvent::LevelChanged => {
-                self.print_score(&gs);
+                self.draw_score(&gs);
             }
             GameEvent::GameStarted => {
-                self.print_score(&gs);
-                self.draw_next_piece(&gs.next_piece, gs.show_next_piece);
-                self.draw_board(&gs.board, gs.current_piece.piece.color)
+                self.refresh_board(gs);
             }
             GameEvent::PieceChanged => {
                 self.draw_next_piece(&gs.next_piece, gs.show_next_piece);
@@ -49,11 +47,6 @@ impl EventHandler for TerminalRenderer {
     }
 }
 
-// impl Clone for Box<dyn EventHandler> {
-//     fn clone(&self) -> Box<dyn EventHandler> {
-//         self.clone_boxed()
-//     }
-// }
 impl Clone for TerminalRenderer {
     fn clone(&self) -> TerminalRenderer {
         TerminalRenderer {
@@ -130,13 +123,15 @@ impl TerminalRenderer {
         state.last_board = Some(board.clone());
     }
 
-    pub fn refresh_board(&mut self, board: &Board, current_piece_color: u8) {
+    pub fn refresh_board(&mut self, gs: &GameState) {
         self.clear_screen();
         {
             self.state.borrow_mut().last_board = None
         };
 
-        self.draw_board(board, current_piece_color);
+        self.draw_board(&gs.board, gs.current_piece.piece.color);
+        self.draw_score(&gs);
+        self.draw_next_piece(&gs.next_piece, gs.show_next_piece);
     }
 
     pub fn clear_screen(&self) {
@@ -144,7 +139,7 @@ impl TerminalRenderer {
             .execute(terminal::Clear(terminal::ClearType::All))
             .unwrap();
     }
-    pub fn print_score(&self, gs: &GameState) {
+    pub fn draw_score(&self, gs: &GameState) {
         print_xy(
             3,
             1,
@@ -196,8 +191,8 @@ impl TerminalRenderer {
         if let Some(last_piece) = &self.state.borrow().last_piece {
             for square in last_piece.view() {
                 print_xy(
-                    ((square.x + 2) * 2) as u16,
-                    (square.y + 2) as u16,
+                    ((xy(&square).0 + 2) * 2) as u16,
+                    (xy(&square).1 + 2) as u16,
                     Color::AnsiValue(1),
                     EMPTY_BLOCK,
                     (3, 13),
@@ -216,8 +211,8 @@ impl TerminalRenderer {
         }
         for square in piece.view() {
             print_xy(
-                ((square.x + 2) * 2) as u16,
-                (square.y + 2) as u16,
+                ((xy(&square).0 + 2) * 2) as u16,
+                (xy(&square).1 + 2) as u16,
                 Color::AnsiValue(piece.color),
                 BLOCK,
                 (3, 13),
@@ -277,11 +272,11 @@ pub fn print_startup(color: u8) {
     }
     let mut x = 3;
     let y = 1;
-    for piece in pieces::PIECES.iter() {
+    for piece in PIECES.iter() {
         for square in piece.view() {
             print_xy(
-                ((square.x * 2) + 2) as u16,
-                ((square.y) + 2) as u16,
+                ((xy(&square).0 * 2) + 2) as u16,
+                (xy(&square).1 + 2) as u16,
                 Color::AnsiValue(piece.color),
                 BLOCK,
                 (x, y),

@@ -1,10 +1,4 @@
 #[derive(Clone, PartialEq, Debug)]
-pub struct Square {
-    pub x: i8,
-    pub y: i8,
-}
-
-#[derive(Clone, PartialEq, Debug)]
 pub enum Orientation {
     Up,
     Right,
@@ -13,6 +7,20 @@ pub enum Orientation {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+
+///
+///  Grid encoding the offsets from the center piece, with only those locations
+///  that are relevant to the pieces we encode.
+///
+///    NW  | N  | NE |
+///    -----------------
+///    W   | C  | E  | EE
+///    -----------------
+///    SW  | S  | SE | ESE
+///    -----------------
+///    WW  | SS | SBE|
+///
+///
 pub enum Offsets {
     Center,
     North,
@@ -29,6 +37,10 @@ pub enum Offsets {
     EastBySouthEast,
 }
 
+///
+/// Mapping of the grid to relative x, y coordinates.
+/// North is up, so smaller y, East is right, so larger x.
+///
 pub fn xy(offset: &Offsets) -> (i8, i8) {
     match offset {
         Center => (0, 0),

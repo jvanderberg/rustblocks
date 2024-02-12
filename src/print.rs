@@ -34,11 +34,11 @@ impl EventHandler for TerminalRenderer {
                 self.refresh_board(gs);
             }
             GameEvent::PieceChanged => {
-                self.draw_next_piece(&gs.next_piece, gs.show_next_piece);
-                self.draw_board(&gs.board, gs.current_piece.piece.color);
+                self.draw_next_piece(&gs.get_next_piece(), gs.get_show_next_piece());
+                self.draw_board(&gs.get_board(), gs.get_current_piece().piece.color);
             }
             _ => {
-                self.draw_board(&gs.board, gs.current_piece.piece.color);
+                self.draw_board(&gs.get_board(), gs.get_current_piece().piece.color);
             }
         }
     }
@@ -129,9 +129,9 @@ impl TerminalRenderer {
             self.state.borrow_mut().last_board = None
         };
 
-        self.draw_board(&gs.board, gs.current_piece.piece.color);
+        self.draw_board(&gs.get_board(), gs.get_current_piece().piece.color);
         self.draw_score(&gs);
-        self.draw_next_piece(&gs.next_piece, gs.show_next_piece);
+        self.draw_next_piece(&gs.get_next_piece(), gs.get_show_next_piece());
     }
 
     pub fn clear_screen(&self) {
@@ -140,21 +140,22 @@ impl TerminalRenderer {
             .unwrap();
     }
     pub fn draw_score(&self, gs: &GameState) {
+        let (score, lines, level) = gs.get_score();
         print_xy(
             3,
             1,
             Color::AnsiValue(1),
-            gs.difficulty.to_string().as_str(),
+            gs.get_difficulty().to_string().as_str(),
             (0, 0),
         );
         print_xy(
-            3 + gs.difficulty.to_string().len() as u16 + 1,
+            3 + gs.get_difficulty().to_string().len() as u16 + 1,
             1,
             Color::AnsiValue(1),
             "Mode",
             (0, 0),
         );
-        let score_text = if gs.undo_used {
+        let score_text = if gs.get_undo_used() {
             "Score (Undo Used)"
         } else {
             "Score"
@@ -164,7 +165,7 @@ impl TerminalRenderer {
             3,
             4,
             Color::AnsiValue(1),
-            format!("{}", gs.score).as_str(),
+            format!("{}", score).as_str(),
             (0, 0),
         );
         print_xy(3, 6, Color::AnsiValue(1), "Level", (0, 0));
@@ -172,7 +173,7 @@ impl TerminalRenderer {
             3,
             7,
             Color::AnsiValue(1),
-            format!("{}", gs.level).as_str(),
+            format!("{}", level).as_str(),
             (0, 0),
         );
         print_xy(3, 9, Color::AnsiValue(1), "Lines", (0, 0));
@@ -180,7 +181,7 @@ impl TerminalRenderer {
             3,
             10,
             Color::AnsiValue(1),
-            format!("{}", gs.lines).as_str(),
+            format!("{}", lines).as_str(),
             (0, 0),
         );
 

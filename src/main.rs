@@ -9,7 +9,7 @@ use crossterm::{
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal,
 };
-use gamestate::{Difficulty, GameState};
+use gamestate::{Difficulty, GameState, GameStatus};
 use print::{hide_cursor, print_startup, show_cursor};
 
 #[derive(Parser, Debug)]
@@ -72,8 +72,7 @@ fn main() -> std::io::Result<()> {
         // keyboard repeat rate plays the biggest role in the speed of the game.
         if poll(std::time::Duration::from_millis(16))? {
             let event = read()?;
-            if gs.startup_screen {
-                gs.startup_screen = false;
+            if *gs.get_status() == GameStatus::NotStarted {
                 tr.refresh_board(&gs);
                 gs.start();
                 continue;
@@ -101,13 +100,11 @@ fn main() -> std::io::Result<()> {
                             args.horizontal,
                             args.vertical,
                             args.hide_next_piece,
-                            gs.difficulty.clone(),
+                            gs.get_difficulty().clone(),
                         );
-                        gs.startup_screen = false;
 
                         gs.add_event_handler(Box::new(tr.clone()));
                         gs.initialize_board_pieces();
-                        gs.startup_screen = false;
                         last_tick = std::time::SystemTime::now();
 
                         backup_state = gs.clone();
@@ -130,9 +127,8 @@ fn main() -> std::io::Result<()> {
                             args.horizontal,
                             args.vertical,
                             args.hide_next_piece,
-                            gs.difficulty.clone(),
+                            gs.get_difficulty().clone(),
                         );
-                        gs.startup_screen = false;
                         gs.add_event_handler(Box::new(tr.clone()));
                         gs.initialize_board_pieces();
                         tr.refresh_board(&gs);
@@ -157,11 +153,11 @@ fn main() -> std::io::Result<()> {
                 _ => false,
             };
         }
-        if gs.startup_screen {
+        if *gs.get_status() == GameStatus::NotStarted {
             continue;
         }
         // Using unwrap here is safe because we know that the system time is always valid, if it's not, we have bigger problems.
-        if !gs.game_over
+        if (*gs.get_status() == GameStatus::Running)
             && last_tick.elapsed().unwrap().as_millis() > gs.get_piece_interval() as u128
         {
             last_tick = std::time::SystemTime::now();

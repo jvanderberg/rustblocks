@@ -26,7 +26,13 @@ impl Clone for Box<dyn EventHandler> {
         self.clone_boxed()
     }
 }
-
+#[derive(Clone, Debug, PartialEq)]
+pub enum GameStatus {
+    Running,
+    Paused,
+    GameOver,
+    NotStarted,
+}
 impl std::str::FromStr for Difficulty {
     type Err = String;
 
@@ -53,14 +59,14 @@ impl std::string::ToString for Difficulty {
 }
 
 ///
-/// Simple macro to DRY the move logic
+/// Simple macro to DRY-up the move logic
 /// This macro will move the current piece in the direction of the command
 /// If the piece can move, it will update the board and emit the PieceMoved event
 /// If the piece cannot move, it will return false
 ///
 macro_rules! move_piece {
     ($gs: expr, $command: ident ) => {
-        let res = !$gs.game_over && $gs.current_piece.$command(&$gs.board);
+        let res = $gs.status == GameStatus::Running && $gs.current_piece.$command(&$gs.board);
         if res {
             $gs.update_board();
             $gs.emit(&GameEvent::PieceMoved);
@@ -70,22 +76,21 @@ macro_rules! move_piece {
 }
 
 pub struct GameState {
-    pub current_piece: CurrentPiece,
-    pub next_piece: Piece,
-    pub board: Board,
-    pub difficulty: Difficulty,
-    pub piece_bag: Bag,
-    pub lines: i32,
-    pub level: i32,
-    pub score: i32,
-    pub show_tracer: bool,
-    pub show_next_piece: bool,
-    pub startup_screen: bool,
-    pub width: u16,
-    pub height: u16,
-    pub undo_used: bool,
-    pub pieces: u16,
-    pub game_over: bool,
+    current_piece: CurrentPiece,
+    next_piece: Piece,
+    board: Board,
+    difficulty: Difficulty,
+    piece_bag: Bag,
+    lines: i32,
+    level: i32,
+    score: i32,
+    show_tracer: bool,
+    show_next_piece: bool,
+    width: u16,
+    height: u16,
+    undo_used: bool,
+    pieces: u16,
+    status: GameStatus,
     event_handlers: Vec<Box<dyn EventHandler>>,
 }
 
@@ -102,12 +107,11 @@ impl Clone for GameState {
             score: self.score,
             show_tracer: self.show_tracer,
             show_next_piece: self.show_next_piece,
-            startup_screen: self.startup_screen,
             width: self.width,
             height: self.height,
             undo_used: self.undo_used,
             pieces: self.pieces,
-            game_over: self.game_over,
+            status: self.status.clone(),
             event_handlers: Vec::new(),
         }
     }
@@ -166,14 +170,51 @@ impl GameState {
             score: 0,
             show_tracer: false,
             show_next_piece: !hide_next_piece,
-            startup_screen: true,
             width,
             height,
             undo_used: false,
             pieces: 0,
-            game_over: false,
+            status: GameStatus::NotStarted,
             event_handlers: Vec::new(),
         }
+    }
+
+    pub fn get_difficulty(&self) -> Difficulty {
+        self.difficulty.clone()
+    }
+
+    pub fn get_next_piece(&self) -> Piece {
+        self.next_piece.clone()
+    }
+    ///
+    /// Get score, lines, and level
+    ///
+    pub fn get_score(&self) -> (i32, i32, i32) {
+        (self.score, self.lines, self.level)
+    }
+
+    pub fn get_status(&self) -> &GameStatus {
+        &self.status
+    }
+
+    pub fn get_current_piece(&self) -> &CurrentPiece {
+        &self.current_piece
+    }
+
+    pub fn get_board(&self) -> &Board {
+        &self.board
+    }
+
+    pub fn get_show_next_piece(&self) -> bool {
+        self.show_next_piece
+    }
+
+    pub fn get_show_tracer(&self) -> bool {
+        self.show_tracer
+    }
+
+    pub fn get_undo_used(&self) -> bool {
+        self.undo_used
     }
 
     ///
@@ -184,13 +225,9 @@ impl GameState {
     /// current state
     ///
     pub fn restore(&self, old_state: &GameState) -> GameState {
-        if self.game_over || self.pieces == 0 {
-            return self.clone();
-        }
         let mut gs = old_state.clone();
         gs.undo_used = true;
         gs.reset_current_piece();
-
         gs.update_board();
         gs
     }
@@ -199,7 +236,7 @@ impl GameState {
     /// Start, or restart the game
     ///
     pub fn start(&mut self) {
-        self.startup_screen = false;
+        self.status = GameStatus::Running;
         self.emit(&GameEvent::GameStarted);
     }
 
@@ -346,7 +383,9 @@ impl GameState {
     /// This will move the current piece down one step
     /// If the piece cannot move down, it will commit the piece to the board
     /// and spawn a new piece
-    /// If the new piece collides with the board, the game is over
+    /// If the new piece collides with the board, the game is over,
+    /// Ideally this should be called every get_piece_interval() milliseconds, though an
+    /// implementor can ignore that and call it as often as they like
     ///
     pub fn advance_game(&mut self) -> bool {
         let success = self.current_piece.move_down(&self.board);
@@ -358,7 +397,7 @@ impl GameState {
 
             if self.collides() {
                 // Game over
-                self.game_over = true;
+                self.status = GameStatus::GameOver;
                 self.emit(&GameEvent::GameOver);
             } else {
                 self.update_board();
@@ -378,7 +417,7 @@ impl GameState {
     /// If the new piece collides with the board, the game is over
     ///
     pub fn drop(&mut self) {
-        if self.game_over {
+        if self.status != GameStatus::Running {
             return;
         }
         while self.current_piece.move_down(&self.board) {
@@ -391,7 +430,7 @@ impl GameState {
         self.update_score(lines_cleared);
         if self.collides() {
             // Game over
-            self.game_over = true;
+            self.status = GameStatus::GameOver;
             self.emit(&GameEvent::GameOver);
         } else {
             self.update_board();

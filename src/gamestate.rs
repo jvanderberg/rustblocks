@@ -116,7 +116,7 @@ impl Clone for GameState {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum GameEvent {
     ScoreChanged,
     LevelChanged,
@@ -416,9 +416,9 @@ impl GameState {
     /// This will commit the piece to the board and spawn a new piece
     /// If the new piece collides with the board, the game is over
     ///
-    pub fn drop(&mut self) {
+    pub fn drop(&mut self) -> bool {
         if self.status != GameStatus::Running {
-            return;
+            return false;
         }
         while self.current_piece.move_down(&self.board) {
             thread::sleep(std::time::Duration::from_millis(10));
@@ -432,9 +432,11 @@ impl GameState {
             // Game over
             self.status = GameStatus::GameOver;
             self.emit(&GameEvent::GameOver);
+            false
         } else {
             self.update_board();
             self.emit(&GameEvent::PieceChanged);
+            true
         }
     }
 

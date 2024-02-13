@@ -2,7 +2,7 @@ mod board;
 mod gamestate;
 mod pieces;
 mod print;
-
+mod test;
 use clap::Parser;
 use clap::{arg, command};
 use crossterm::{

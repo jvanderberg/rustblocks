@@ -2,10 +2,9 @@ use std::thread;
 
 use crate::{
     board::{
-        clear_lines, commit_current_piece, commit_piece, draw_tracer, remove_tracer, Bag, Board,
-        CurrentPiece,
+        clear_lines, draw_piece, draw_tracer, remove_piece, remove_tracer, Bag, Board, CurrentPiece,
     },
-    pieces::Piece,
+    pieces::{Piece, PieceColor},
 };
 
 #[derive(Clone, Debug)]
@@ -14,6 +13,14 @@ pub enum Difficulty {
     Medium,
     Hard,
     Insane,
+}
+#[derive(Default, Copy, Clone)]
+pub enum DropSpeed {
+    Slow = 50,
+    Medium = 20,
+    #[default]
+    Fast = 10,
+    Off = 0,
 }
 
 pub trait EventHandler {
@@ -26,6 +33,8 @@ impl Clone for Box<dyn EventHandler> {
         self.clone_boxed()
     }
 }
+
+/// The current status of the game
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameStatus {
     Running,
@@ -65,16 +74,22 @@ impl std::string::ToString for Difficulty {
 /// If the piece cannot move, it will return false
 ///
 macro_rules! move_piece {
-    ($gs: expr, $command: ident ) => {
-        let res = $gs.status == GameStatus::Running && $gs.current_piece.$command(&$gs.board);
+    ($gs: expr, $command: ident ) => {{
+        $gs.remove_current_piece();
+        let res = $gs.status != GameStatus::GameOver && $gs.current_piece.$command(&$gs.board);
+        $gs.update_board();
+
         if res {
-            $gs.update_board();
             $gs.emit(&GameEvent::PieceMoved);
         }
-        return res;
-    };
+        res
+    }};
 }
 
+///
+/// The full game state of the blocks game,
+/// it's all private and accessed and mutated via impl methods below
+///
 pub struct GameState {
     current_piece: CurrentPiece,
     next_piece: Piece,
@@ -127,13 +142,22 @@ pub enum GameEvent {
     GameReset,
     GameStarted,
 }
-
+/// Get the initial position for a new piece
 fn get_initial_position(width: u16, _height: u16) -> (u16, u16) {
     ((width / 2) as u16, 2)
 }
 
+///
+/// GameState impl
+///
 impl GameState {
-    pub fn new(width: u16, height: u16, hide_next_piece: bool, difficulty: Difficulty) -> Self {
+    pub fn new(
+        width: u16,
+        height: u16,
+        hide_next_piece: bool,
+        difficulty: Difficulty,
+        event_handler: Box<dyn EventHandler>,
+    ) -> Self {
         let mut piece_bag = Bag::new();
 
         let initial_positon = get_initial_position(width, height);
@@ -147,26 +171,26 @@ impl GameState {
         let mut board = Board {
             width: width + 2,
             height: height + 1,
-            cells: vec![vec![0; (height + 1) as usize]; (width + 2) as usize],
+            cells: vec![vec![PieceColor::Empty; (height + 1) as usize]; (width + 2) as usize],
         };
 
         for i in 0..board.width {
-            board.cells[i as usize][board.height.saturating_sub(1) as usize] = 8;
+            board.cells[i as usize][board.height.saturating_sub(1) as usize] = PieceColor::Wall;
         }
 
         for i in 0..height {
-            board.cells[0][i as usize] = 8;
-            board.cells[(board.width.saturating_sub(1)) as usize][i as usize] = 8;
+            board.cells[0][i as usize] = PieceColor::Wall;
+            board.cells[(board.width.saturating_sub(1)) as usize][i as usize] = PieceColor::Wall;
         }
 
-        GameState {
+        let mut gs = GameState {
             current_piece,
             next_piece: piece_bag.next(),
             board,
             difficulty,
             piece_bag,
             lines: 0,
-            level: 0,
+            level: 1,
             score: 0,
             show_tracer: false,
             show_next_piece: !hide_next_piece,
@@ -176,15 +200,28 @@ impl GameState {
             pieces: 0,
             status: GameStatus::NotStarted,
             event_handlers: Vec::new(),
-        }
+        };
+
+        gs.event_handlers.push(event_handler);
+        gs.emit(&GameEvent::GameReset);
+
+        gs.initialize_board_pieces();
+
+        gs
     }
 
-    pub fn get_difficulty(&self) -> Difficulty {
-        self.difficulty.clone()
+    ///
+    /// Get the difficulty level
+    ///
+    pub fn get_difficulty(&self) -> &Difficulty {
+        &self.difficulty
     }
 
-    pub fn get_next_piece(&self) -> Piece {
-        self.next_piece.clone()
+    ///
+    /// Get the next piece
+    ///
+    pub fn get_next_piece(&self) -> &Piece {
+        &self.next_piece
     }
     ///
     /// Get score, lines, and level
@@ -193,26 +230,43 @@ impl GameState {
         (self.score, self.lines, self.level)
     }
 
+    ///
+    /// Get the current status of the game
     pub fn get_status(&self) -> &GameStatus {
         &self.status
     }
 
+    ///
+    /// Get the current piece
+    ///
     pub fn get_current_piece(&self) -> &CurrentPiece {
         &self.current_piece
     }
 
+    ///
+    /// Get the board layout
+    ///
     pub fn get_board(&self) -> &Board {
         &self.board
     }
 
+    ///
+    /// Whether or not the next piece should be shown
+    ///
     pub fn get_show_next_piece(&self) -> bool {
         self.show_next_piece
     }
 
+    ///
+    /// Whether or not the tracer should be shown
+    ///
     pub fn get_show_tracer(&self) -> bool {
         self.show_tracer
     }
 
+    ///
+    /// Whether or not a state has been restored
+    ///
     pub fn get_undo_used(&self) -> bool {
         self.undo_used
     }
@@ -271,6 +325,9 @@ impl GameState {
     ///
     pub fn toggle_tracer(&mut self) {
         self.show_tracer = !self.show_tracer;
+        self.update_board();
+        // Signal that something on the board has changed.
+        self.emit(&GameEvent::PieceMoved);
     }
 
     ///
@@ -346,36 +403,28 @@ impl GameState {
     /// Move the current piece left
     ///
     pub fn move_left(&mut self) -> bool {
-        move_piece!(self, move_left);
+        move_piece!(self, move_left)
     }
 
     ///
     /// Move the current piece right
     ///
     pub fn move_right(&mut self) -> bool {
-        move_piece!(self, move_right);
+        move_piece!(self, move_right)
     }
 
     ///
     /// Rotate the current piece right
     ///
     pub fn rotate_right(&mut self) -> bool {
-        move_piece!(self, rotate_right);
+        move_piece!(self, rotate_right)
     }
 
     ///
     /// Move the current piece down
     ///
     pub fn move_down(&mut self) -> bool {
-        move_piece!(self, move_down);
-    }
-
-    ///
-    /// Test if the currrent piece collides with the board pieces
-    ///
-    pub fn collides(&self) -> bool {
-        self.current_piece
-            .collides(&self.board, self.current_piece.x, self.current_piece.y)
+        move_piece!(self, move_down)
     }
 
     ///
@@ -388,24 +437,11 @@ impl GameState {
     /// implementor can ignore that and call it as often as they like
     ///
     pub fn advance_game(&mut self) -> bool {
-        let success = self.current_piece.move_down(&self.board);
+        let success = move_piece!(self, move_down);
         self.update_board();
         if !success {
-            let lines_cleared = self.piece_hit_bottom();
-
-            self.update_score(lines_cleared);
-
-            if self.collides() {
-                // Game over
-                self.status = GameStatus::GameOver;
-                self.emit(&GameEvent::GameOver);
-            } else {
-                self.update_board();
-                self.emit(&GameEvent::PieceChanged);
-            }
-            false
+            self.piece_hit_bottom()
         } else {
-            self.update_board();
             self.emit(&GameEvent::PieceMoved);
             true
         }
@@ -416,19 +452,71 @@ impl GameState {
     /// This will commit the piece to the board and spawn a new piece
     /// If the new piece collides with the board, the game is over
     ///
-    pub fn drop(&mut self) -> bool {
+    pub fn drop(&mut self, drop_speed: DropSpeed) -> bool {
         if self.status != GameStatus::Running {
             return false;
         }
-        while self.current_piece.move_down(&self.board) {
-            thread::sleep(std::time::Duration::from_millis(10));
+        while move_piece!(self, move_down) {
+            thread::sleep(std::time::Duration::from_millis(drop_speed as u64));
             self.update_board();
-            self.emit(&GameEvent::PieceMoved);
         }
-        let lines_cleared = self.piece_hit_bottom();
+        self.piece_hit_bottom()
+    }
+
+    ///
+    /// This resets the current piece to the iniatial position
+    /// Useful for undo, or restoring a game
+    ///
+    pub fn reset_current_piece(&mut self) {
+        self.remove_current_piece();
+        self.current_piece = self.current_piece.clone();
+        self.current_piece.x = self.get_initial_position().0 as i32;
+        self.current_piece.y = self.get_initial_position().1 as i32;
+        self.update_board();
+        self.emit(&GameEvent::PieceChanged)
+    }
+
+    ///
+    /// Updates the board after a change
+    ///
+    pub fn update_board(self: &mut GameState) {
+        // Draw the tracer first so it does not collide with the piece
+        if self.show_tracer {
+            let mut tracer = self.current_piece.clone();
+            while tracer.move_down(&self.board) {
+                draw_tracer(&tracer.piece, &mut self.board, tracer.x, tracer.y);
+            }
+        } else {
+            remove_tracer(&mut self.board);
+        }
+        draw_piece(
+            &self.current_piece.piece,
+            &mut self.board,
+            self.current_piece.x,
+            self.current_piece.y,
+            self.current_piece.piece.color,
+        );
+    }
+
+    ///
+    /// Handles the piece hitting the bottom of the board.
+    /// This includes clearing any lines, updating the next piece
+    /// And then checking if the next piece can move, if not, the game is over
+    /// and we return false, otherwise we return true, and emit a piece changed event
+    ///
+    pub fn piece_hit_bottom(self: &mut GameState) -> bool {
+        self.pieces += 1;
+        let lines_cleared = clear_lines(&mut self.board);
 
         self.update_score(lines_cleared);
-        if self.collides() {
+        self.current_piece = CurrentPiece {
+            piece: self.next_piece.clone(),
+            x: self.get_initial_position().0 as i32,
+            y: self.get_initial_position().1 as i32,
+        };
+        self.next_piece = self.piece_bag.next();
+        let success = move_piece!(self, move_down);
+        if !success {
             // Game over
             self.status = GameStatus::GameOver;
             self.emit(&GameEvent::GameOver);
@@ -441,62 +529,6 @@ impl GameState {
     }
 
     ///
-    /// This resets the current piece to the iniatial position
-    /// Useful for undo, or restoring a game
-    ///
-    pub fn reset_current_piece(&mut self) {
-        self.current_piece = self.current_piece.clone();
-        self.current_piece.x = self.get_initial_position().0 as i32;
-        self.current_piece.y = self.get_initial_position().1 as i32;
-        self.update_board();
-        self.emit(&GameEvent::PieceChanged)
-    }
-
-    ///
-    /// Updates the board after a change
-    ///
-    pub fn update_board(self: &mut GameState) {
-        commit_current_piece(&self.current_piece, &mut self.board);
-
-        if self.show_tracer {
-            let mut tracer = self.current_piece.clone();
-            while tracer.move_down(&self.board) {}
-            draw_tracer(&tracer.piece, &mut self.board, tracer.x, tracer.y);
-        } else {
-            remove_tracer(&mut self.board);
-        }
-    }
-
-    ///
-    /// Handles the piece hitting the bottom of the board.
-    /// This includes committing the piece to the board, clearing any lines, and updating the score.
-    /// It also sets the next piece to the current piece and gets a new next piece from the piece bag, and
-    /// prints the new next piece on the board.
-    ///
-
-    pub fn piece_hit_bottom(self: &mut GameState) -> i32 {
-        // Commit the piece to the board with it's actual color, not the '255' current piece color.
-        // This makes it 'permanent' on the board.
-        commit_piece(
-            &self.current_piece.piece,
-            &mut self.board,
-            self.current_piece.x,
-            self.current_piece.y,
-            self.current_piece.piece.color,
-        );
-        self.pieces += 1;
-        let lines = clear_lines(&mut self.board);
-
-        self.current_piece = CurrentPiece {
-            piece: self.next_piece.clone(),
-            x: self.get_initial_position().0 as i32,
-            y: self.get_initial_position().1 as i32,
-        };
-        self.next_piece = self.piece_bag.next();
-        return lines;
-    }
-
-    ///
     ///  Based on the difficulty, we want to introduce some random pieces, move them randomly, and drop them
     /// to make the game more interesting.
     ///
@@ -506,44 +538,49 @@ impl GameState {
             Difficulty::Hard => 5,
             Difficulty::Insane => 10,
         };
+        self.remove_current_piece();
         for _i in 0..extra_pieces {
-            let mut piece: CurrentPiece = CurrentPiece {
-                piece: self.piece_bag.next().clone(),
-                x: self.get_initial_position().0 as i32,
-                y: self.get_initial_position().1 as i32,
-            };
+            // pause the current thread
+            thread::sleep(std::time::Duration::from_millis(10));
 
-            piece.rotate_right(&self.board);
             // Randomly move the piece left or right
             let int = rand::random::<i32>() % (self.width - self.width / 2) as i32;
             if int > 0 {
                 for _ in 0..int {
-                    piece.move_left(&self.board);
+                    move_piece!(self, move_left);
+                    thread::sleep(std::time::Duration::from_millis(10));
                 }
             } else {
                 for _ in 0..int.abs() {
-                    piece.move_right(&self.board);
+                    move_piece!(self, move_right);
+                    thread::sleep(std::time::Duration::from_millis(10));
                 }
             }
 
-            while piece.move_down(&self.board) {}
-            commit_piece(
-                &piece.piece,
-                &mut self.board,
-                piece.x,
-                piece.y,
-                piece.piece.color,
-            );
-            self.update_board();
+            while move_piece!(self, move_down) && move_piece!(self, rotate_right) {
+                thread::sleep(std::time::Duration::from_millis(10));
+            }
+            self.piece_hit_bottom();
         }
 
         for i in 0..self.board.width {
-            self.board.cells[i as usize][self.board.height.saturating_sub(1) as usize] = 8;
+            self.board.cells[i as usize][self.board.height.saturating_sub(1) as usize] =
+                PieceColor::Wall;
         }
 
         for i in 0..self.height {
-            self.board.cells[0][i as usize] = 8;
-            self.board.cells[(self.board.width.saturating_sub(1)) as usize][i as usize] = 8;
+            self.board.cells[0][i as usize] = PieceColor::Wall;
+            self.board.cells[(self.board.width.saturating_sub(1)) as usize][i as usize] =
+                PieceColor::Wall;
         }
+    }
+
+    fn remove_current_piece(&mut self) {
+        remove_piece(
+            &self.current_piece.piece,
+            &mut self.board,
+            self.current_piece.x,
+            self.current_piece.y,
+        );
     }
 }

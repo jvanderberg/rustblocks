@@ -6,6 +6,21 @@ pub enum Orientation {
     Left,
 }
 
+#[derive(Clone, PartialEq, Debug, Copy)]
+#[repr(u8)]
+pub enum PieceColor {
+    Wall,
+    Empty,
+    Red,
+    Green,
+    Blue,
+    Yellow,
+    Cyan,
+    Magenta,
+    Orange,
+    Tracer,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 
 ///
@@ -64,7 +79,7 @@ pub type PieceView = [Offsets; 4];
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Piece {
-    pub color: u8,
+    pub color: PieceColor,
     pub orientation: Orientation,
     up: PieceView,
     right: PieceView,
@@ -104,7 +119,7 @@ impl Piece {
 pub const PIECES: [Piece; 7] = [
     // O piece
     Piece {
-        color: 11,
+        color: PieceColor::Yellow,
         orientation: Orientation::Up,
         up: [North, NorthEast, Center, East],
         right: [North, NorthEast, Center, East],
@@ -113,7 +128,7 @@ pub const PIECES: [Piece; 7] = [
     },
     // T Piece
     Piece {
-        color: 93,
+        color: PieceColor::Magenta,
         orientation: Orientation::Up,
         up: [Center, West, East, North],
         right: [Center, East, North, South],
@@ -122,7 +137,7 @@ pub const PIECES: [Piece; 7] = [
     },
     Piece {
         // I piece
-        color: 14,
+        color: PieceColor::Cyan,
         orientation: Orientation::Up,
         up: [West, Center, East, EastEast],
         right: [NorthEast, East, SouthEast, SouthBySouthEast],
@@ -131,7 +146,7 @@ pub const PIECES: [Piece; 7] = [
     },
     Piece {
         // L piece
-        color: 208,
+        color: PieceColor::Orange,
         orientation: Orientation::Up,
         up: [West, Center, East, NorthEast],
         right: [North, Center, South, SouthEast],
@@ -140,7 +155,7 @@ pub const PIECES: [Piece; 7] = [
     },
     Piece {
         // J piece
-        color: 21,
+        color: PieceColor::Blue,
         orientation: Orientation::Up,
         up: [Center, East, West, NorthWest],
         right: [NorthEast, North, Center, South],
@@ -149,7 +164,7 @@ pub const PIECES: [Piece; 7] = [
     },
     Piece {
         // S piece
-        color: 10,
+        color: PieceColor::Green,
         orientation: Orientation::Up,
         up: [West, Center, North, NorthEast],
         right: [North, Center, East, SouthEast],
@@ -158,7 +173,7 @@ pub const PIECES: [Piece; 7] = [
     },
     Piece {
         // Z piece
-        color: 9,
+        color: PieceColor::Red,
         orientation: Orientation::Up,
         up: [NorthWest, North, Center, East],
         right: [South, Center, East, NorthEast],

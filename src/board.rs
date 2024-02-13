@@ -1,16 +1,17 @@
 ///
 /// The board module contains the logic for the game board and the pieces.
 /// The board is represented as a 2D array of u8, where 0 is an empty cell and any other value is a piece.
-/// The pieces are represented as a 4x4 grid of u8, where 0 is an empty cell and any other value is a piece.
+/// 255 is a special value used to draw the current piece. 254 is the tracer piece.
+///
 use rand::seq::SliceRandom;
 
-use crate::pieces::{xy, Piece, PIECES};
+use crate::pieces::{xy, Piece, PieceColor, PIECES};
 
 #[derive(Clone)]
 pub struct Board {
     pub width: u16,
     pub height: u16,
-    pub cells: Vec<Vec<u8>>,
+    pub cells: Vec<Vec<PieceColor>>,
 }
 
 #[derive(Clone)]
@@ -51,7 +52,7 @@ pub fn clear_lines(board: &mut Board) -> i32 {
     let mut y = board.height as usize - 2;
     let mut lines = 0;
     while y > 0 {
-        if (0..board.width).all(|x| board.cells[x as usize][y] > 0) {
+        if (0..board.width).all(|x| board.cells[x as usize][y] != PieceColor::Empty) {
             lines += 1;
             for y2 in (1..=y).rev() {
                 for x in 0..board.width {
@@ -66,36 +67,21 @@ pub fn clear_lines(board: &mut Board) -> i32 {
 }
 
 ///
-/// Draws the current piece on the board, using the 'special' color 255.
-/// The 'draw_diff' function will then draw the piece in the correct color using the color
-/// the gs.current_piece, this is so we can differentiate it from the 'dead' pieces.
-///
-pub fn commit_current_piece(current_piece: &CurrentPiece, board: &mut Board) {
-    commit_piece(
-        &current_piece.piece,
-        board,
-        current_piece.x,
-        current_piece.y,
-        255,
-    );
-}
-
-///
 /// Draws the piece on the board.
 ///
-pub fn commit_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: u8) {
-    // Clear out the current position of the piece, if any.
-    for y in 0..board.height {
-        for x in 0..board.width {
-            if board.cells[x as usize][y as usize] == 255 {
-                board.cells[x as usize][y as usize] = 0;
-            }
-        }
-    }
+pub fn draw_piece(piece: &Piece, board: &mut Board, x: i32, y: i32, color: PieceColor) {
     for square in piece.view() {
         let x = xy(&square).0 as i32 + x as i32;
         let y = xy(&square).1 as i32 + y as i32;
         board.cells[x as usize][y as usize] = color;
+    }
+}
+
+pub fn remove_piece(piece: &Piece, board: &mut Board, x: i32, y: i32) {
+    for square in piece.view() {
+        let x = xy(&square).0 as i32 + x as i32;
+        let y = xy(&square).1 as i32 + y as i32;
+        board.cells[x as usize][y as usize] = PieceColor::Empty;
     }
 }
 
@@ -106,8 +92,8 @@ pub fn remove_tracer(board: &mut Board) {
     // Clear out the current position of the piece, if any.
     for y in 0..board.height {
         for x in 0..board.width {
-            if board.cells[x as usize][y as usize] == 254 {
-                board.cells[x as usize][y as usize] = 0;
+            if board.cells[x as usize][y as usize] == PieceColor::Tracer {
+                board.cells[x as usize][y as usize] = PieceColor::Empty;
             }
         }
     }
@@ -121,21 +107,24 @@ pub fn draw_tracer(piece: &Piece, board: &mut Board, x: i32, y: i32) {
     for square in piece.view() {
         let x = xy(&square).0 as i32 + x as i32;
         let y = xy(&square).1 as i32 + y as i32;
-        board.cells[x as usize][y as usize] = 254;
+        board.cells[x as usize][y as usize] = PieceColor::Tracer;
     }
 }
 
 impl CurrentPiece {
     pub fn collides(&self, board: &Board, x: i32, y: i32) -> bool {
         for square in self.piece.view() {
-            let x = xy(&square).0 as i32 + x as i32;
-            let y = xy(&square).1 as i32 + y as i32;
+            let dx = xy(&square).0 as i32;
+            let dy = xy(&square).1 as i32;
+            let x = dx as i32 + x as i32;
+            let y = dy as i32 + y as i32;
+
             if x < 0 || x >= board.width as i32 || y >= board.height as i32 {
                 return true;
             }
             if y >= 0
-                && board.cells[x as usize][y as usize] > 0
-                && board.cells[x as usize][y as usize] < 254
+                && board.cells[x as usize][y as usize] != PieceColor::Empty
+                && board.cells[x as usize][y as usize] != PieceColor::Tracer
             {
                 return true;
             }

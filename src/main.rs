@@ -9,7 +9,7 @@ use crossterm::{
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal,
 };
-use gamestate::{Difficulty, GameState, GameStatus};
+use gamestate::{Difficulty, DropSpeed, GameState, GameStatus};
 use print::{hide_cursor, print_startup, show_cursor};
 
 #[derive(Parser, Debug)]
@@ -35,29 +35,25 @@ pub struct Args {
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
+    let window_size = crossterm::terminal::size()?;
+
+    let mut tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical);
+
     let mut gs = GameState::new(
         args.horizontal,
         args.vertical,
         args.hide_next_piece,
         args.difficulty.clone(),
+        Box::new(tr.clone()),
     );
 
-    let window_size = crossterm::terminal::size()?;
-
-    //    let event_handler = get_handler(window_size.clone(), args.horizontal, args.vertical);
-    let mut tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical);
-
-    // event_handler!(renderer, gs, terminal_renderer);
-    gs.add_event_handler(Box::new(tr.clone()));
-    gs.initialize_board_pieces();
     let mut backup_state = gs.clone();
-
     let mut last_tick = std::time::SystemTime::now();
 
     terminal::enable_raw_mode()?;
     tr.clear_screen();
     hide_cursor();
-    print_startup(1);
+    print_startup(93);
 
     loop {
         // Indicates if the board has changed and needs to be redrawn.
@@ -101,15 +97,12 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
+                            Box::new(tr.clone()),
                         );
-
-                        gs.add_event_handler(Box::new(tr.clone()));
-                        gs.initialize_board_pieces();
-                        last_tick = std::time::SystemTime::now();
-
-                        backup_state = gs.clone();
-                        tr.refresh_board(&gs);
                         gs.start();
+                        last_tick = std::time::SystemTime::now();
+                        backup_state = gs.clone();
+
                         continue;
                     }
                     KeyCode::Char('N') | KeyCode::Char('n') => {
@@ -128,20 +121,18 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
+                            Box::new(tr.clone()),
                         );
-                        gs.add_event_handler(Box::new(tr.clone()));
-                        gs.initialize_board_pieces();
-                        tr.refresh_board(&gs);
+                        gs.start();
 
                         last_tick = std::time::SystemTime::now();
-
                         backup_state = gs.clone();
-                        gs.start();
+
                         continue;
                     }
                     KeyCode::Char(' ') => {
                         backup_state = gs.clone();
-                        gs.drop();
+                        gs.drop(DropSpeed::default());
 
                         true
                     }

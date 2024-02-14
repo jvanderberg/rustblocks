@@ -20,7 +20,7 @@ mod test {
         }
     }
     impl EventHandler for TestEvents {
-        fn handle_event(&mut self, _: &GameState, ge: &GameEvent) {
+        fn handle_event(&self, _: &GameState, ge: &GameEvent) {
             self.events.borrow_mut().push(ge.clone());
         }
         fn clone_boxed(&self) -> Box<dyn EventHandler> {
@@ -34,13 +34,7 @@ mod test {
     #[test]
     pub fn test_create() {
         let test_events = TestEvents::new();
-        let mut gs = GameState::new(
-            10,
-            22,
-            false,
-            Difficulty::Easy,
-            Box::new(test_events.clone()),
-        );
+        let mut gs = GameState::new(10, 22, false, Difficulty::Easy, &test_events);
         gs.initialize_board_pieces();
 
         assert_eq!(
@@ -57,13 +51,7 @@ mod test {
     #[test]
     pub fn test_move() {
         let test_events = TestEvents::new();
-        let mut gs = GameState::new(
-            10,
-            22,
-            false,
-            Difficulty::Easy,
-            Box::new(test_events.clone()),
-        );
+        let mut gs = GameState::new(10, 22, false, Difficulty::Easy, &test_events);
 
         gs.start();
         let current_piece = gs.get_current_piece().clone();
@@ -95,13 +83,7 @@ mod test {
     #[test]
     pub fn test_rotate() {
         let test_events = TestEvents::new();
-        let mut gs = GameState::new(
-            10,
-            22,
-            false,
-            Difficulty::Easy,
-            Box::new(test_events.clone()),
-        );
+        let mut gs = GameState::new(10, 22, false, Difficulty::Easy, &test_events);
         gs.initialize_board_pieces();
 
         let current_piece = gs.get_current_piece().clone();
@@ -129,13 +111,7 @@ mod test {
     #[test]
     pub fn drop() {
         let test_events = TestEvents::new();
-        let mut gs = GameState::new(
-            10,
-            22,
-            false,
-            Difficulty::Easy,
-            Box::new(test_events.clone()),
-        );
+        let mut gs = GameState::new(10, 22, false, Difficulty::Easy, &test_events);
 
         assert_eq!(
             gs.drop(crate::gamestate::DropSpeed::Off),
@@ -168,17 +144,11 @@ mod test {
     #[test]
     pub fn test_game_over() {
         let test_events = TestEvents::new();
-        let mut gs = GameState::new(
-            10,
-            22,
-            false,
-            Difficulty::Easy,
-            Box::new(test_events.clone()),
-        );
+        let mut gs = GameState::new(10, 22, false, Difficulty::Easy, &test_events);
         gs.initialize_board_pieces();
         let test_events = TestEvents::new();
         gs.start();
-        gs.add_event_handler(Box::new(test_events.clone()));
+        gs.add_event_handler(&test_events);
 
         // Drop til you stop
         while gs.drop(crate::gamestate::DropSpeed::Off) {}

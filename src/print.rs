@@ -8,7 +8,7 @@ use crossterm::{
     style::{Color, Print, SetForegroundColor},
     terminal, ExecutableCommand,
 };
-use std::{cell::RefCell, io::stdout, rc::Rc};
+use std::{cell::RefCell, io::stdout};
 pub const BLOCK: &str = "\u{2588}\u{2588}";
 pub const EMPTY_BLOCK: &str = "  ";
 #[derive(Clone, Default)]
@@ -20,8 +20,9 @@ struct TerminalRendererState {
     board_offset: (u16, u16),
 }
 
+#[derive(Clone)]
 pub struct TerminalRenderer {
-    state: Rc<RefCell<TerminalRendererState>>,
+    state: RefCell<TerminalRendererState>,
 }
 
 // Map Piece colors to ANSI colors
@@ -43,7 +44,7 @@ impl PieceColor {
     }
 }
 impl EventHandler for TerminalRenderer {
-    fn handle_event(&mut self, gs: &GameState, ge: &GameEvent) {
+    fn handle_event(&self, gs: &GameState, ge: &GameEvent) {
         match ge {
             GameEvent::ScoreChanged | GameEvent::LinesClearedChanged | GameEvent::LevelChanged => {
                 self.draw_score(&gs);
@@ -65,34 +66,27 @@ impl EventHandler for TerminalRenderer {
     }
 }
 
-impl Clone for TerminalRenderer {
-    fn clone(&self) -> TerminalRenderer {
-        TerminalRenderer {
-            state: Rc::clone(&self.state),
-        }
-    }
-}
 impl TerminalRenderer {
     pub fn new(window_size: (u16, u16), board_width: u16, board_height: u16) -> TerminalRenderer {
         let board_offset = get_board_offset(window_size, board_width, board_height);
         TerminalRenderer {
-            state: Rc::new(RefCell::new(TerminalRendererState {
+            state: RefCell::new(TerminalRendererState {
                 last_board: None,
                 window_size,
                 last_piece: None,
                 board_offset,
-            })),
+            }),
         }
     }
 
     pub fn get_window_size(&self) -> (u16, u16) {
         self.state.borrow().window_size
     }
-    pub fn set_window_size(&mut self, window_size: (u16, u16)) {
+    pub fn set_window_size(&self, window_size: (u16, u16)) {
         self.state.borrow_mut().window_size = window_size;
         self.state.borrow_mut().board_offset = get_board_offset(window_size, 10, 22);
     }
-    pub fn draw_board(&mut self, board: &Board) {
+    pub fn draw_board(&self, board: &Board) {
         let mut state = self.state.borrow_mut();
         for y in 0..board.height {
             for x in 0..board.width {
@@ -132,7 +126,7 @@ impl TerminalRenderer {
         state.last_board = Some(board.clone());
     }
 
-    pub fn refresh_board(&mut self, gs: &GameState) {
+    pub fn refresh_board(&self, gs: &GameState) {
         self.clear_screen();
         {
             self.state.borrow_mut().last_board = None
@@ -214,7 +208,7 @@ impl TerminalRenderer {
     ///
     /// Print the next piece in the upper left
     ///
-    pub fn draw_next_piece(&mut self, piece: &Piece, show_next_piece: bool) {
+    pub fn draw_next_piece(&self, piece: &Piece, show_next_piece: bool) {
         self.remove_next_piece();
         if !show_next_piece {
             return;

@@ -37,17 +37,16 @@ fn main() -> std::io::Result<()> {
 
     let window_size = crossterm::terminal::size()?;
 
-    let mut tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical);
+    let tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical);
 
     let mut gs = GameState::new(
         args.horizontal,
         args.vertical,
         args.hide_next_piece,
         args.difficulty.clone(),
-        Box::new(tr.clone()),
+        &tr,
     );
 
-    let mut backup_state = gs.clone();
     let mut last_tick = std::time::SystemTime::now();
 
     terminal::enable_raw_mode()?;
@@ -69,7 +68,7 @@ fn main() -> std::io::Result<()> {
         if poll(std::time::Duration::from_millis(16))? {
             let event = read()?;
             if *gs.get_status() == GameStatus::NotStarted {
-                tr.refresh_board(&gs);
+                // tr.refresh_board(&gs);
                 gs.start();
                 continue;
             }
@@ -97,11 +96,10 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
-                            Box::new(tr.clone()),
+                            &tr,
                         );
                         gs.start();
                         last_tick = std::time::SystemTime::now();
-                        backup_state = gs.clone();
 
                         continue;
                     }
@@ -110,8 +108,7 @@ fn main() -> std::io::Result<()> {
                         true
                     }
                     KeyCode::Char('U') | KeyCode::Char('u') => {
-                        gs = gs.restore(&backup_state);
-                        gs.add_event_handler(Box::new(tr.clone()));
+                        gs = gs.undo(&tr);
                         gs.start();
                         true
                     }
@@ -121,17 +118,15 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
-                            Box::new(tr.clone()),
+                            &tr,
                         );
                         gs.start();
 
                         last_tick = std::time::SystemTime::now();
-                        backup_state = gs.clone();
 
                         continue;
                     }
                     KeyCode::Char(' ') => {
-                        backup_state = gs.clone();
                         gs.drop(DropSpeed::default());
 
                         true
@@ -152,11 +147,7 @@ fn main() -> std::io::Result<()> {
             && last_tick.elapsed().unwrap().as_millis() > gs.get_piece_interval() as u128
         {
             last_tick = std::time::SystemTime::now();
-            let temp_backup_state = gs.clone();
-            if !gs.advance_game() {
-                // The piece has hit bottom, snapshot the state before it fell
-                backup_state = temp_backup_state;
-            }
+            gs.advance_game();
         }
     }
 

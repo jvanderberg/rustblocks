@@ -24,7 +24,7 @@ pub enum DropSpeed {
 }
 
 pub trait EventHandler {
-    fn handle_event(&mut self, gs: &GameState, event: &GameEvent);
+    fn handle_event(&self, gs: &GameState, event: &GameEvent);
     fn clone_boxed(&self) -> Box<dyn EventHandler>;
 }
 
@@ -90,7 +90,7 @@ macro_rules! move_piece {
 /// The full game state of the blocks game,
 /// it's all private and accessed and mutated via impl methods below
 ///
-pub struct GameState {
+pub struct GameState<'a> {
     current_piece: CurrentPiece,
     next_piece: Piece,
     board: Board,
@@ -106,10 +106,11 @@ pub struct GameState {
     undo_used: bool,
     pieces: u16,
     status: GameStatus,
-    event_handlers: Vec<Box<dyn EventHandler>>,
+    backup: Option<Box<GameState<'a>>>,
+    event_handlers: Vec<&'a dyn EventHandler>,
 }
 
-impl Clone for GameState {
+impl<'a> Clone for GameState<'a> {
     fn clone(&self) -> Self {
         GameState {
             current_piece: self.current_piece.clone(),
@@ -127,6 +128,7 @@ impl Clone for GameState {
             undo_used: self.undo_used,
             pieces: self.pieces,
             status: self.status.clone(),
+            backup: None,
             event_handlers: Vec::new(),
         }
     }
@@ -150,13 +152,13 @@ fn get_initial_position(width: u16, _height: u16) -> (u16, u16) {
 ///
 /// GameState impl
 ///
-impl GameState {
+impl<'a> GameState<'a> {
     pub fn new(
         width: u16,
         height: u16,
         hide_next_piece: bool,
         difficulty: Difficulty,
-        event_handler: Box<dyn EventHandler>,
+        event_handler: &'a dyn EventHandler,
     ) -> Self {
         let mut piece_bag = Bag::new();
 
@@ -199,9 +201,11 @@ impl GameState {
             undo_used: false,
             pieces: 0,
             status: GameStatus::NotStarted,
+            backup: None,
             event_handlers: Vec::new(),
         };
 
+        gs.backup = Some(Box::new(gs.clone()));
         gs.event_handlers.push(event_handler);
         gs.emit(&GameEvent::GameReset);
 
@@ -223,6 +227,7 @@ impl GameState {
     pub fn get_next_piece(&self) -> &Piece {
         &self.next_piece
     }
+
     ///
     /// Get score, lines, and level
     ///
@@ -278,12 +283,17 @@ impl GameState {
     /// If the game is over, or there are no pieces left, it will return the
     /// current state
     ///
-    pub fn restore(&self, old_state: &GameState) -> GameState {
-        let mut gs = old_state.clone();
-        gs.undo_used = true;
-        gs.reset_current_piece();
-        gs.update_board();
-        gs
+    pub fn undo(&self, ev: &'a dyn EventHandler) -> GameState<'a> {
+        if let Some(backup) = &self.backup {
+            let mut gs = *backup.clone();
+            gs.undo_used = true;
+            gs.reset_current_piece();
+            gs.update_board();
+            gs.event_handlers.push(ev);
+
+            return gs;
+        }
+        self.clone()
     }
 
     ///
@@ -298,17 +308,17 @@ impl GameState {
     /// Emit an event to all event handlers
     ///
     pub fn emit(&mut self, event: &GameEvent) {
-        for handler in &mut self.event_handlers.clone() {
-            handler.handle_event(self, event);
+        for handler in &self.event_handlers {
+            handler.handle_event(&self, event);
         }
     }
 
     ///
     /// Add an event handler to the game state
     ///
-    pub fn add_event_handler<R>(&mut self, handler: Box<R>)
+    pub fn add_event_handler<R>(&mut self, handler: &'a R)
     where
-        R: EventHandler + 'static,
+        R: EventHandler,
     {
         self.event_handlers.push(handler);
     }
@@ -437,9 +447,14 @@ impl GameState {
     /// implementor can ignore that and call it as often as they like
     ///
     pub fn advance_game(&mut self) -> bool {
+        if self.status != GameStatus::Running {
+            return false;
+        }
+
         let success = move_piece!(self, move_down);
         self.update_board();
         if !success {
+            self.backup = Some(Box::new(self.clone()));
             self.piece_hit_bottom()
         } else {
             self.emit(&GameEvent::PieceMoved);
@@ -456,6 +471,7 @@ impl GameState {
         if self.status != GameStatus::Running {
             return false;
         }
+        self.backup = Some(Box::new(self.clone()));
         while move_piece!(self, move_down) {
             thread::sleep(std::time::Duration::from_millis(drop_speed as u64));
             self.update_board();
@@ -479,7 +495,7 @@ impl GameState {
     ///
     /// Updates the board after a change
     ///
-    pub fn update_board(self: &mut GameState) {
+    pub fn update_board(self: &mut GameState<'a>) {
         // Draw the tracer first so it does not collide with the piece
         if self.show_tracer {
             let mut tracer = self.current_piece.clone();
@@ -504,7 +520,7 @@ impl GameState {
     /// And then checking if the next piece can move, if not, the game is over
     /// and we return false, otherwise we return true, and emit a piece changed event
     ///
-    pub fn piece_hit_bottom(self: &mut GameState) -> bool {
+    pub fn piece_hit_bottom(self: &mut GameState<'a>) -> bool {
         self.pieces += 1;
         let lines_cleared = clear_lines(&mut self.board);
 
@@ -532,7 +548,7 @@ impl GameState {
     ///  Based on the difficulty, we want to introduce some random pieces, move them randomly, and drop them
     /// to make the game more interesting.
     ///
-    pub fn initialize_board_pieces(self: &mut GameState) {
+    pub fn initialize_board_pieces(self: &mut GameState<'a>) {
         let extra_pieces = match self.difficulty {
             Difficulty::Easy | Difficulty::Medium => 0,
             Difficulty::Hard => 5,

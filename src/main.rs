@@ -9,7 +9,7 @@ use crossterm::{
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal,
 };
-use gamestate::{Difficulty, DropSpeed, GameState, GameStatus};
+use gamestate::{Difficulty, DropSpeed, GameEvent, GameState, GameStatus};
 use print::{hide_cursor, print_startup, show_cursor};
 
 #[derive(Parser, Debug)]
@@ -44,8 +44,23 @@ fn main() -> std::io::Result<()> {
         args.vertical,
         args.hide_next_piece,
         args.difficulty.clone(),
-        &tr,
     );
+    let ev = |ge: &GameEvent, gs: &GameState| match ge {
+        GameEvent::ScoreChanged | GameEvent::LinesClearedChanged | GameEvent::LevelChanged => {
+            tr.draw_score(&gs);
+        }
+        GameEvent::GameStarted | GameEvent::GameReset => {
+            tr.refresh_board(&gs);
+        }
+        GameEvent::PieceChanged => {
+            tr.draw_next_piece(&gs.get_next_piece(), gs.get_show_next_piece());
+            tr.draw_board(&gs.get_board());
+        }
+        _ => {
+            tr.draw_board(&gs.get_board());
+        }
+    };
+    gs.add_event_handler(&ev);
 
     let mut last_tick = std::time::SystemTime::now();
 
@@ -96,8 +111,8 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
-                            &tr,
                         );
+                        gs.add_event_handler(&ev);
                         gs.start();
                         last_tick = std::time::SystemTime::now();
 
@@ -108,7 +123,8 @@ fn main() -> std::io::Result<()> {
                         true
                     }
                     KeyCode::Char('U') | KeyCode::Char('u') => {
-                        gs = gs.undo(&tr);
+                        gs = gs.undo();
+                        gs.add_event_handler(&ev);
                         gs.start();
                         true
                     }
@@ -118,8 +134,8 @@ fn main() -> std::io::Result<()> {
                             args.vertical,
                             args.hide_next_piece,
                             gs.get_difficulty().clone(),
-                            &tr,
                         );
+                        gs.add_event_handler(&ev);
                         gs.start();
 
                         last_tick = std::time::SystemTime::now();

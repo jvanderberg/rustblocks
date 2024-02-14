@@ -1,4 +1,4 @@
-use std::thread;
+use std::{cell::RefCell, thread};
 
 use crate::{
     board::{
@@ -14,6 +14,7 @@ pub enum Difficulty {
     Hard,
     Insane,
 }
+#[allow(dead_code)]
 #[derive(Default, Copy, Clone)]
 pub enum DropSpeed {
     Slow = 50,
@@ -23,18 +24,8 @@ pub enum DropSpeed {
     Off = 0,
 }
 
-pub trait EventHandler {
-    fn handle_event(&self, gs: &GameState, event: &GameEvent);
-    fn clone_boxed(&self) -> Box<dyn EventHandler>;
-}
-
-impl Clone for Box<dyn EventHandler> {
-    fn clone(&self) -> Box<dyn EventHandler> {
-        self.clone_boxed()
-    }
-}
-
 /// The current status of the game
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameStatus {
     Running,
@@ -107,7 +98,7 @@ pub struct GameState<'a> {
     pieces: u16,
     status: GameStatus,
     backup: Option<Box<GameState<'a>>>,
-    event_handlers: Vec<&'a dyn EventHandler>,
+    event_handlers: RefCell<Vec<&'a dyn Fn(&GameEvent, &GameState)>>,
 }
 
 impl<'a> Clone for GameState<'a> {
@@ -129,7 +120,7 @@ impl<'a> Clone for GameState<'a> {
             pieces: self.pieces,
             status: self.status.clone(),
             backup: None,
-            event_handlers: Vec::new(),
+            event_handlers: RefCell::new(Vec::new()),
         }
     }
 }
@@ -153,13 +144,7 @@ fn get_initial_position(width: u16, _height: u16) -> (u16, u16) {
 /// GameState impl
 ///
 impl<'a> GameState<'a> {
-    pub fn new(
-        width: u16,
-        height: u16,
-        hide_next_piece: bool,
-        difficulty: Difficulty,
-        event_handler: &'a dyn EventHandler,
-    ) -> Self {
+    pub fn new(width: u16, height: u16, hide_next_piece: bool, difficulty: Difficulty) -> Self {
         let mut piece_bag = Bag::new();
 
         let initial_positon = get_initial_position(width, height);
@@ -202,11 +187,11 @@ impl<'a> GameState<'a> {
             pieces: 0,
             status: GameStatus::NotStarted,
             backup: None,
-            event_handlers: Vec::new(),
+            event_handlers: RefCell::new(Vec::new()),
         };
 
         gs.backup = Some(Box::new(gs.clone()));
-        gs.event_handlers.push(event_handler);
+        // gs.event_handlers.push(event_handler);
         gs.emit(&GameEvent::GameReset);
 
         gs.initialize_board_pieces();
@@ -244,6 +229,7 @@ impl<'a> GameState<'a> {
     ///
     /// Get the current piece
     ///
+    #[allow(dead_code)]
     pub fn get_current_piece(&self) -> &CurrentPiece {
         &self.current_piece
     }
@@ -265,6 +251,7 @@ impl<'a> GameState<'a> {
     ///
     /// Whether or not the tracer should be shown
     ///
+    #[allow(dead_code)]
     pub fn get_show_tracer(&self) -> bool {
         self.show_tracer
     }
@@ -283,13 +270,12 @@ impl<'a> GameState<'a> {
     /// If the game is over, or there are no pieces left, it will return the
     /// current state
     ///
-    pub fn undo(&self, ev: &'a dyn EventHandler) -> GameState<'a> {
+    pub fn undo(&self) -> GameState<'a> {
         if let Some(backup) = &self.backup {
             let mut gs = *backup.clone();
             gs.undo_used = true;
             gs.reset_current_piece();
             gs.update_board();
-            gs.event_handlers.push(ev);
 
             return gs;
         }
@@ -307,20 +293,21 @@ impl<'a> GameState<'a> {
     ///
     /// Emit an event to all event handlers
     ///
-    pub fn emit(&mut self, event: &GameEvent) {
-        for handler in &self.event_handlers {
-            handler.handle_event(&self, event);
+    pub fn emit(&self, event: &GameEvent) {
+        let handlers = self.event_handlers.borrow_mut();
+        for handler in handlers.iter() {
+            handler(event, &self);
         }
     }
 
     ///
     /// Add an event handler to the game state
     ///
-    pub fn add_event_handler<R>(&mut self, handler: &'a R)
+    pub fn add_event_handler<R>(&self, handler: &'a R)
     where
-        R: EventHandler,
+        R: Fn(&GameEvent, &GameState) + 'a,
     {
-        self.event_handlers.push(handler);
+        self.event_handlers.borrow_mut().push(handler);
     }
 
     ///
@@ -557,25 +544,20 @@ impl<'a> GameState<'a> {
         self.remove_current_piece();
         for _i in 0..extra_pieces {
             // pause the current thread
-            thread::sleep(std::time::Duration::from_millis(10));
 
             // Randomly move the piece left or right
             let int = rand::random::<i32>() % (self.width - self.width / 2) as i32;
             if int > 0 {
                 for _ in 0..int {
                     move_piece!(self, move_left);
-                    thread::sleep(std::time::Duration::from_millis(10));
                 }
             } else {
                 for _ in 0..int.abs() {
                     move_piece!(self, move_right);
-                    thread::sleep(std::time::Duration::from_millis(10));
                 }
             }
 
-            while move_piece!(self, move_down) && move_piece!(self, rotate_right) {
-                thread::sleep(std::time::Duration::from_millis(10));
-            }
+            while move_piece!(self, move_down) && move_piece!(self, rotate_right) {}
             self.piece_hit_bottom();
         }
 
@@ -589,6 +571,7 @@ impl<'a> GameState<'a> {
             self.board.cells[(self.board.width.saturating_sub(1)) as usize][i as usize] =
                 PieceColor::Wall;
         }
+        self.backup = Some(Box::new(self.clone()));
     }
 
     fn remove_current_piece(&mut self) {

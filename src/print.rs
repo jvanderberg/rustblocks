@@ -1,8 +1,5 @@
 use crate::pieces::{xy, Piece, PieceColor, PIECES};
-use crate::{
-    board::Board,
-    gamestate::{EventHandler, GameEvent, GameState},
-};
+use crate::{board::Board, gamestate::GameState};
 use crossterm::{
     cursor,
     style::{Color, Print, SetForegroundColor},
@@ -41,28 +38,6 @@ impl PieceColor {
             // This is never used, just a marker for the current piece.
             PieceColor::Tracer => 254,
         }
-    }
-}
-impl EventHandler for TerminalRenderer {
-    fn handle_event(&self, gs: &GameState, ge: &GameEvent) {
-        match ge {
-            GameEvent::ScoreChanged | GameEvent::LinesClearedChanged | GameEvent::LevelChanged => {
-                self.draw_score(&gs);
-            }
-            GameEvent::GameStarted | GameEvent::GameReset => {
-                self.refresh_board(gs);
-            }
-            GameEvent::PieceChanged => {
-                self.draw_next_piece(&gs.get_next_piece(), gs.get_show_next_piece());
-                self.draw_board(&gs.get_board());
-            }
-            _ => {
-                self.draw_board(&gs.get_board());
-            }
-        }
-    }
-    fn clone_boxed(&self) -> Box<dyn EventHandler> {
-        Box::new(Clone::clone(self))
     }
 }
 

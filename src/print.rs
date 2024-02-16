@@ -25,23 +25,23 @@ pub struct TerminalRenderer {
 
 // Map Piece colors to ANSI colors
 trait PieceColorTrait {
-    fn get_color(&self) -> u8;
+    fn get_color(&self) -> String;
 }
 
 impl PieceColorTrait for PieceColor {
-    fn get_color(&self) -> u8 {
+    fn get_color(&self) -> String {
         match self {
-            PieceColor::Wall => 8,
-            PieceColor::Empty => 0,
-            PieceColor::Red => 9,
-            PieceColor::Green => 10,
-            PieceColor::Blue => 21,
-            PieceColor::Yellow => 11,
-            PieceColor::Cyan => 14,
-            PieceColor::Magenta => 93,
-            PieceColor::Orange => 208,
+            PieceColor::Wall => '⬜'.to_string(),
+            PieceColor::Empty => '⬛'.to_string(),
+            PieceColor::Red => '🟥'.to_string(),
+            PieceColor::Green => '🟩'.to_string(),
+            PieceColor::Blue => '🟦'.to_string(),
+            PieceColor::Yellow => '🟨'.to_string(),
+            PieceColor::Cyan => '🟫'.to_string(),
+            PieceColor::Magenta => '🟪'.to_string(),
+            PieceColor::Orange => '🟧'.to_string(),
             // This is never used, just a marker for the current piece.
-            PieceColor::Tracer => 254,
+            PieceColor::Tracer => '⬜'.to_string(),
         }
     }
 }
@@ -76,6 +76,8 @@ impl TerminalRenderer {
         let mut state = self.state.borrow_mut();
         for y in 0..board.height {
             for x in 0..board.width {
+                let color_str = board.cells[x as usize][y as usize].get_color();
+                let text = color_str.as_str();
                 if let Some(prev_board) = &state.last_board {
                     if prev_board.cells[x as usize][y as usize] != PieceColor::Empty
                         && board.cells[x as usize][y as usize] == PieceColor::Empty
@@ -93,8 +95,8 @@ impl TerminalRenderer {
                         print_xy(
                             x as u16 * 2,
                             y as u16,
-                            Color::AnsiValue(board.cells[x as usize][y as usize].get_color()),
-                            BLOCK,
+                            Color::AnsiValue(0),
+                            text,
                             state.board_offset,
                         );
                     }
@@ -102,8 +104,8 @@ impl TerminalRenderer {
                     print_xy(
                         x as u16 * 2,
                         y as u16,
-                        Color::AnsiValue(board.cells[x as usize][y as usize].get_color()),
-                        BLOCK,
+                        Color::AnsiValue(0),
+                        text,
                         state.board_offset,
                     );
                 }
@@ -224,11 +226,14 @@ impl TerminalRenderer {
             return;
         }
         for square in piece.view() {
+            let color_str = piece.color.get_color();
+            let text = color_str.as_str();
+
             print_xy(
                 ((xy(&square).0 + 2) * 2) as u16,
                 (xy(&square).1 + 2) as u16,
-                Color::AnsiValue(piece.color.get_color()),
-                BLOCK,
+                Color::AnsiValue(0),
+                text,
                 (3, 13),
             );
         }
@@ -288,11 +293,13 @@ pub fn print_startup(color: u8) {
     let y = 1;
     for piece in PIECES.iter() {
         for square in piece.view() {
+            let color_str = piece.color.get_color();
+            let text = color_str.as_str();
             print_xy(
                 ((xy(&square).0 * 2) + 2) as u16,
                 (xy(&square).1 + 2) as u16,
-                Color::AnsiValue(piece.color.get_color()),
-                BLOCK,
+                Color::AnsiValue(0),
+                text,
                 (x, y),
             );
         }

@@ -1,5 +1,5 @@
-use crate::pieces::{xy, Piece, PieceColor, PIECES};
-use crate::{board::Board, gamestate::GameState};
+use blocks_lib::pieces::{xy, Piece, PieceColor, PIECES};
+use blocks_lib::{board::Board, gamestate::GameState};
 use crossterm::{
     cursor,
     style::{Color, Print, SetForegroundColor},
@@ -15,6 +15,7 @@ struct TerminalRendererState {
     window_size: (u16, u16),
     last_piece: Option<Piece>,
     board_offset: (u16, u16),
+    text_color: u8,
 }
 
 #[derive(Clone)]
@@ -23,8 +24,12 @@ pub struct TerminalRenderer {
 }
 
 // Map Piece colors to ANSI colors
-impl PieceColor {
-    pub fn get_color(&self) -> u8 {
+trait PieceColorTrait {
+    fn get_color(&self) -> u8;
+}
+
+impl PieceColorTrait for PieceColor {
+    fn get_color(&self) -> u8 {
         match self {
             PieceColor::Wall => 8,
             PieceColor::Empty => 0,
@@ -42,7 +47,12 @@ impl PieceColor {
 }
 
 impl TerminalRenderer {
-    pub fn new(window_size: (u16, u16), board_width: u16, board_height: u16) -> TerminalRenderer {
+    pub fn new(
+        window_size: (u16, u16),
+        board_width: u16,
+        board_height: u16,
+        text_color: u8,
+    ) -> TerminalRenderer {
         let board_offset = get_board_offset(window_size, board_width, board_height);
         TerminalRenderer {
             state: RefCell::new(TerminalRendererState {
@@ -50,6 +60,7 @@ impl TerminalRenderer {
                 window_size,
                 last_piece: None,
                 board_offset,
+                text_color,
             }),
         }
     }
@@ -122,14 +133,14 @@ impl TerminalRenderer {
         print_xy(
             3,
             1,
-            Color::AnsiValue(93),
+            Color::AnsiValue(self.state.borrow().text_color),
             gs.get_difficulty().to_string().as_str(),
             (0, 0),
         );
         print_xy(
             3 + gs.get_difficulty().to_string().len() as u16 + 1,
             1,
-            Color::AnsiValue(93),
+            Color::AnsiValue(self.state.borrow().text_color),
             "Mode",
             (0, 0),
         );
@@ -138,32 +149,56 @@ impl TerminalRenderer {
         } else {
             "Score"
         };
-        print_xy(3, 3, Color::AnsiValue(93), score_text, (0, 0));
+        print_xy(
+            3,
+            3,
+            Color::AnsiValue(self.state.borrow().text_color),
+            score_text,
+            (0, 0),
+        );
         print_xy(
             3,
             4,
-            Color::AnsiValue(93),
+            Color::AnsiValue(self.state.borrow().text_color),
             format!("{}", score).as_str(),
             (0, 0),
         );
-        print_xy(3, 6, Color::AnsiValue(93), "Level", (0, 0));
+        print_xy(
+            3,
+            6,
+            Color::AnsiValue(self.state.borrow().text_color),
+            "Level",
+            (0, 0),
+        );
         print_xy(
             3,
             7,
-            Color::AnsiValue(93),
+            Color::AnsiValue(self.state.borrow().text_color),
             format!("{}", level).as_str(),
             (0, 0),
         );
-        print_xy(3, 9, Color::AnsiValue(93), "Lines", (0, 0));
+        print_xy(
+            3,
+            9,
+            Color::AnsiValue(self.state.borrow().text_color),
+            "Lines",
+            (0, 0),
+        );
         print_xy(
             3,
             10,
-            Color::AnsiValue(93),
+            Color::AnsiValue(self.state.borrow().text_color),
             format!("{}", lines).as_str(),
             (0, 0),
         );
 
-        print_xy(3, 12, Color::AnsiValue(93), "Next Piece", (0, 0));
+        print_xy(
+            3,
+            12,
+            Color::AnsiValue(self.state.borrow().text_color),
+            "Next Piece",
+            (0, 0),
+        );
     }
 
     fn remove_next_piece(&self) {

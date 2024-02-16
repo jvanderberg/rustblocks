@@ -1,15 +1,13 @@
-mod board;
-mod gamestate;
-mod pieces;
 mod print;
-mod test;
+
+use blocks_lib::gamestate::DropSpeed;
+use blocks_lib::gamestate::{Difficulty, GameEvent, GameState, GameStatus};
 use clap::Parser;
 use clap::{arg, command};
 use crossterm::{
     event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal,
 };
-use gamestate::{Difficulty, DropSpeed, GameEvent, GameState, GameStatus};
 use print::{hide_cursor, print_startup, show_cursor};
 
 #[derive(Parser, Debug)]
@@ -33,11 +31,25 @@ pub struct Args {
 }
 
 fn main() -> std::io::Result<()> {
+    let color;
+    match terminal_light::luma() {
+        Ok(luma) if luma > 0.85 => {
+            // Use a "light mode" skin.
+            color = 0;
+        }
+        Ok(luma) if luma < 0.2 => {
+            // Use a "dark mode" skin.
+            color = 15;
+        }
+        _ => {
+            color = 93;
+        }
+    }
     let args = Args::parse();
 
     let window_size = crossterm::terminal::size()?;
 
-    let tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical);
+    let tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical, color);
 
     let mut gs = GameState::new(
         args.horizontal,
@@ -67,7 +79,7 @@ fn main() -> std::io::Result<()> {
     terminal::enable_raw_mode()?;
     tr.clear_screen();
     hide_cursor();
-    print_startup(93);
+    print_startup(color);
 
     loop {
         // Indicates if the board has changed and needs to be redrawn.

@@ -1,7 +1,7 @@
 mod print;
 
-use blocks_lib::gamestate::DropSpeed;
 use blocks_lib::gamestate::{Difficulty, GameEvent, GameState, GameStatus};
+use blocks_lib::gamestate::{DropSpeed, Emoji};
 use clap::Parser;
 use clap::{arg, command};
 use crossterm::{
@@ -23,6 +23,11 @@ pub struct Args {
     /// Whether to show the next piece
     #[arg(short = 'n', long, default_value = "false")]
     hide_next_piece: bool,
+
+    /// Use colored emojies instead of unicode block
+    /// Square, Circle, Heart, or None
+    #[arg(short = 'e', long, default_value = "None")]
+    emoji: Emoji,
 
     /// The difficulty of the game, changes the speed of the game.
     /// Easy, Medium, Hard, Insane, or 1, 2, 3, 4
@@ -49,7 +54,13 @@ fn main() -> std::io::Result<()> {
 
     let window_size = crossterm::terminal::size()?;
 
-    let tr = print::TerminalRenderer::new(window_size, args.horizontal, args.vertical, color);
+    let tr = print::TerminalRenderer::new(
+        window_size,
+        args.horizontal,
+        args.vertical,
+        color,
+        args.emoji,
+    );
 
     let mut gs = GameState::new(
         args.horizontal,
@@ -79,7 +90,7 @@ fn main() -> std::io::Result<()> {
     terminal::enable_raw_mode()?;
     tr.clear_screen();
     hide_cursor();
-    print_startup(color);
+    print_startup(color, args.emoji);
 
     loop {
         // Indicates if the board has changed and needs to be redrawn.
@@ -94,11 +105,6 @@ fn main() -> std::io::Result<()> {
         // keyboard repeat rate plays the biggest role in the speed of the game.
         if poll(std::time::Duration::from_millis(16))? {
             let event = read()?;
-            if *gs.get_status() == GameStatus::NotStarted {
-                // tr.refresh_board(&gs);
-                gs.start();
-                continue;
-            }
 
             match event {
                 Event::Key(KeyEvent {
@@ -106,63 +112,82 @@ fn main() -> std::io::Result<()> {
                     code,
                     modifiers: _,
                     state: _,
-                }) => match code {
-                    KeyCode::Esc => break,
-                    KeyCode::Char('H') | KeyCode::Char('h') | KeyCode::Left => gs.move_left(),
-                    KeyCode::Char('L') | KeyCode::Char('l') | KeyCode::Right => gs.move_right(),
-                    KeyCode::Char('K') | KeyCode::Char('k') | KeyCode::Up => gs.rotate_right(),
-                    KeyCode::Char('J') | KeyCode::Char('j') | KeyCode::Down => gs.move_down(),
-                    KeyCode::Char('T') | KeyCode::Char('t') => {
-                        gs.toggle_tracer();
-                        true
+                }) => {
+                    if *gs.get_status() == GameStatus::NotStarted {
+                        match code {
+                            KeyCode::Char('\\') => {
+                                // For some reason this is sent thru on startup
+                                continue;
+                            }
+                            _ => {
+                                gs.start();
+                                continue;
+                            }
+                        }
                     }
-                    KeyCode::Char('d') | KeyCode::Char('D') => {
-                        gs.cycle_difficulty();
-                        gs = GameState::new(
-                            args.horizontal,
-                            args.vertical,
-                            args.hide_next_piece,
-                            gs.get_difficulty().clone(),
-                        );
-                        gs.add_event_handler(&ev);
-                        gs.start();
-                        last_tick = std::time::SystemTime::now();
+                    match code {
+                        KeyCode::Esc => break,
+                        KeyCode::Char('H') | KeyCode::Char('h') | KeyCode::Left => gs.move_left(),
 
-                        continue;
-                    }
-                    KeyCode::Char('N') | KeyCode::Char('n') => {
-                        gs.toggle_show_next_piece();
-                        true
-                    }
-                    KeyCode::Char('U') | KeyCode::Char('u') => {
-                        gs = gs.undo();
-                        gs.add_event_handler(&ev);
-                        gs.start();
-                        true
-                    }
-                    KeyCode::Backspace | KeyCode::Delete => {
-                        gs = GameState::new(
-                            args.horizontal,
-                            args.vertical,
-                            args.hide_next_piece,
-                            gs.get_difficulty().clone(),
-                        );
-                        gs.add_event_handler(&ev);
-                        gs.start();
+                        KeyCode::Char('L') | KeyCode::Char('l') | KeyCode::Right => gs.move_right(),
+                        KeyCode::Char('K') | KeyCode::Char('k') | KeyCode::Up => gs.rotate_right(),
+                        KeyCode::Char('J') | KeyCode::Char('j') | KeyCode::Down => gs.move_down(),
+                        KeyCode::Char('T') | KeyCode::Char('t') => {
+                            gs.toggle_tracer();
+                            true
+                        }
+                        KeyCode::Char('B') | KeyCode::Char('b') => {
+                            tr.cycle_emoji(&gs);
+                            true
+                        }
+                        KeyCode::Char('d') | KeyCode::Char('D') => {
+                            gs.cycle_difficulty();
+                            gs = GameState::new(
+                                args.horizontal,
+                                args.vertical,
+                                args.hide_next_piece,
+                                gs.get_difficulty().clone(),
+                            );
+                            gs.add_event_handler(&ev);
+                            gs.start();
+                            last_tick = std::time::SystemTime::now();
 
-                        last_tick = std::time::SystemTime::now();
+                            continue;
+                        }
+                        KeyCode::Char('N') | KeyCode::Char('n') => {
+                            gs.toggle_show_next_piece();
+                            true
+                        }
+                        KeyCode::Char('U') | KeyCode::Char('u') => {
+                            gs = gs.undo();
+                            gs.add_event_handler(&ev);
+                            gs.start();
+                            true
+                        }
+                        KeyCode::Backspace | KeyCode::Delete => {
+                            gs = GameState::new(
+                                args.horizontal,
+                                args.vertical,
+                                args.hide_next_piece,
+                                gs.get_difficulty().clone(),
+                            );
+                            gs.add_event_handler(&ev);
+                            gs.start();
 
-                        continue;
+                            last_tick = std::time::SystemTime::now();
+
+                            continue;
+                        }
+                        KeyCode::Char(' ') => {
+                            gs.drop(DropSpeed::default());
+
+                            true
+                        }
+                        KeyCode::Char('q') => break,
+
+                        _ => false,
                     }
-                    KeyCode::Char(' ') => {
-                        gs.drop(DropSpeed::default());
-
-                        true
-                    }
-                    KeyCode::Char('q') => break,
-
-                    _ => false,
-                },
+                }
 
                 _ => false,
             };

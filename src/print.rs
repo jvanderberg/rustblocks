@@ -1,3 +1,4 @@
+use blocks_lib::gamestate::Emoji;
 use blocks_lib::pieces::{xy, Piece, PieceColor, PIECES};
 use blocks_lib::{board::Board, gamestate::GameState};
 use crossterm::{
@@ -5,7 +6,9 @@ use crossterm::{
     style::{Color, Print, SetForegroundColor},
     terminal, ExecutableCommand,
 };
+
 use std::{cell::RefCell, io::stdout};
+
 pub const BLOCK: &str = "\u{2588}\u{2588}";
 pub const EMPTY_BLOCK: &str = "  ";
 #[derive(Clone, Default)]
@@ -16,6 +19,7 @@ struct TerminalRendererState {
     last_piece: Option<Piece>,
     board_offset: (u16, u16),
     text_color: u8,
+    emoji: Emoji,
 }
 
 #[derive(Clone)]
@@ -25,23 +29,62 @@ pub struct TerminalRenderer {
 
 // Map Piece colors to ANSI colors
 trait PieceColorTrait {
-    fn get_color(&self) -> String;
+    fn get_color(&self, emoji: Emoji) -> (String, u8);
 }
 
 impl PieceColorTrait for PieceColor {
-    fn get_color(&self) -> String {
-        match self {
-            PieceColor::Wall => '⬜'.to_string(),
-            PieceColor::Empty => '⬛'.to_string(),
-            PieceColor::Red => '🟥'.to_string(),
-            PieceColor::Green => '🟩'.to_string(),
-            PieceColor::Blue => '🟦'.to_string(),
-            PieceColor::Yellow => '🟨'.to_string(),
-            PieceColor::Cyan => '🟫'.to_string(),
-            PieceColor::Magenta => '🟪'.to_string(),
-            PieceColor::Orange => '🟧'.to_string(),
-            // This is never used, just a marker for the current piece.
-            PieceColor::Tracer => '⬜'.to_string(),
+    fn get_color(&self, emoji: Emoji) -> (String, u8) {
+        match emoji {
+            Emoji::Block => match self {
+                PieceColor::Wall => ('⬜'.to_string(), 8),
+                PieceColor::Empty => ('⬛'.to_string(), 0),
+                PieceColor::Red => ('🟥'.to_string(), 9),
+                PieceColor::Green => ('🟩'.to_string(), 10),
+                PieceColor::Blue => ('🟦'.to_string(), 21),
+                PieceColor::Yellow => ('🟨'.to_string(), 11),
+                PieceColor::Cyan => ('🟫'.to_string(), 14),
+                PieceColor::Magenta => ('🟪'.to_string(), 93),
+                PieceColor::Orange => ('🟧'.to_string(), 208),
+                PieceColor::Tracer => ('⬜'.to_string(), 254),
+            },
+            Emoji::Circle => match self {
+                PieceColor::Wall => ('⚪'.to_string(), 8),
+                PieceColor::Empty => ('⚫'.to_string(), 0),
+                PieceColor::Red => ('🔴'.to_string(), 9),
+                PieceColor::Green => ('🟢'.to_string(), 10),
+                PieceColor::Blue => ('🔵'.to_string(), 21),
+                PieceColor::Yellow => ('🟡'.to_string(), 11),
+                PieceColor::Cyan => ('🟤'.to_string(), 14),
+                PieceColor::Magenta => ('🟣'.to_string(), 93),
+                PieceColor::Orange => ('🟠'.to_string(), 208),
+                PieceColor::Tracer => ('⚪'.to_string(), 254),
+            },
+            Emoji::Heart => match self {
+                PieceColor::Wall => ('🤍'.to_string(), 8),
+                PieceColor::Empty => ('🖤'.to_string(), 0),
+                PieceColor::Red => ('🩵'.to_string(), 9),
+                PieceColor::Green => ('💚'.to_string(), 10),
+                PieceColor::Blue => ('💙'.to_string(), 21),
+                PieceColor::Yellow => ('💛'.to_string(), 11),
+                PieceColor::Cyan => ('🤎'.to_string(), 14),
+                PieceColor::Magenta => ('💜'.to_string(), 93),
+                PieceColor::Orange => ('🧡'.to_string(), 208),
+                PieceColor::Tracer => ('🤍'.to_string(), 254),
+            },
+
+            Emoji::None => match self {
+                PieceColor::Wall => (BLOCK.to_string(), 8),
+                PieceColor::Empty => (BLOCK.to_string(), 0),
+                PieceColor::Red => (BLOCK.to_string(), 9),
+                PieceColor::Green => (BLOCK.to_string(), 10),
+                PieceColor::Blue => (BLOCK.to_string(), 21),
+                PieceColor::Yellow => (BLOCK.to_string(), 11),
+                PieceColor::Cyan => (BLOCK.to_string(), 14),
+                PieceColor::Magenta => (BLOCK.to_string(), 93),
+                PieceColor::Orange => (BLOCK.to_string(), 208),
+                // This is never used, just a marker for the current piece.
+                PieceColor::Tracer => (BLOCK.to_string(), 254),
+            },
         }
     }
 }
@@ -52,6 +95,7 @@ impl TerminalRenderer {
         board_width: u16,
         board_height: u16,
         text_color: u8,
+        emoji: Emoji,
     ) -> TerminalRenderer {
         let board_offset = get_board_offset(window_size, board_width, board_height);
         TerminalRenderer {
@@ -61,10 +105,24 @@ impl TerminalRenderer {
                 last_piece: None,
                 board_offset,
                 text_color,
+                emoji,
             }),
         }
     }
 
+    pub fn cycle_emoji(&self, gs: &GameState) {
+        {
+            let mut state = self.state.borrow_mut();
+            state.emoji = match state.emoji {
+                Emoji::Block => Emoji::Circle,
+                Emoji::Circle => Emoji::Heart,
+                Emoji::Heart => Emoji::None,
+                Emoji::None => Emoji::Block,
+            };
+        }
+
+        self.refresh_board(gs);
+    }
     pub fn get_window_size(&self) -> (u16, u16) {
         self.state.borrow().window_size
     }
@@ -76,8 +134,8 @@ impl TerminalRenderer {
         let mut state = self.state.borrow_mut();
         for y in 0..board.height {
             for x in 0..board.width {
-                let color_str = board.cells[x as usize][y as usize].get_color();
-                let text = color_str.as_str();
+                let (text, color) = board.cells[x as usize][y as usize].get_color(state.emoji);
+
                 if let Some(prev_board) = &state.last_board {
                     if prev_board.cells[x as usize][y as usize] != PieceColor::Empty
                         && board.cells[x as usize][y as usize] == PieceColor::Empty
@@ -85,8 +143,8 @@ impl TerminalRenderer {
                         print_xy(
                             x as u16 * 2,
                             y as u16,
-                            Color::AnsiValue(0),
-                            EMPTY_BLOCK,
+                            Color::AnsiValue(color),
+                            EMPTY_BLOCK.to_string(),
                             state.board_offset,
                         );
                     } else if prev_board.cells[x as usize][y as usize]
@@ -95,7 +153,7 @@ impl TerminalRenderer {
                         print_xy(
                             x as u16 * 2,
                             y as u16,
-                            Color::AnsiValue(0),
+                            Color::AnsiValue(color),
                             text,
                             state.board_offset,
                         );
@@ -104,7 +162,7 @@ impl TerminalRenderer {
                     print_xy(
                         x as u16 * 2,
                         y as u16,
-                        Color::AnsiValue(0),
+                        Color::AnsiValue(color),
                         text,
                         state.board_offset,
                     );
@@ -136,14 +194,14 @@ impl TerminalRenderer {
             3,
             1,
             Color::AnsiValue(self.state.borrow().text_color),
-            gs.get_difficulty().to_string().as_str(),
+            gs.get_difficulty().to_string(),
             (0, 0),
         );
         print_xy(
             3 + gs.get_difficulty().to_string().len() as u16 + 1,
             1,
             Color::AnsiValue(self.state.borrow().text_color),
-            "Mode",
+            "Mode".to_string(),
             (0, 0),
         );
         let score_text = if gs.get_undo_used() {
@@ -155,42 +213,42 @@ impl TerminalRenderer {
             3,
             3,
             Color::AnsiValue(self.state.borrow().text_color),
-            score_text,
+            score_text.to_string(),
             (0, 0),
         );
         print_xy(
             3,
             4,
             Color::AnsiValue(self.state.borrow().text_color),
-            format!("{}", score).as_str(),
+            format!("{}", score),
             (0, 0),
         );
         print_xy(
             3,
             6,
             Color::AnsiValue(self.state.borrow().text_color),
-            "Level",
+            "Level".to_string(),
             (0, 0),
         );
         print_xy(
             3,
             7,
             Color::AnsiValue(self.state.borrow().text_color),
-            format!("{}", level).as_str(),
+            format!("{}", level),
             (0, 0),
         );
         print_xy(
             3,
             9,
             Color::AnsiValue(self.state.borrow().text_color),
-            "Lines",
+            "Lines".to_string(),
             (0, 0),
         );
         print_xy(
             3,
             10,
             Color::AnsiValue(self.state.borrow().text_color),
-            format!("{}", lines).as_str(),
+            format!("{}", lines),
             (0, 0),
         );
 
@@ -198,7 +256,7 @@ impl TerminalRenderer {
             3,
             12,
             Color::AnsiValue(self.state.borrow().text_color),
-            "Next Piece",
+            "Next Piece".to_string(),
             (0, 0),
         );
     }
@@ -210,7 +268,7 @@ impl TerminalRenderer {
                     ((xy(&square).0 + 2) * 2) as u16,
                     (xy(&square).1 + 2) as u16,
                     Color::AnsiValue(1),
-                    EMPTY_BLOCK,
+                    EMPTY_BLOCK.to_string(),
                     (3, 13),
                 );
             }
@@ -226,13 +284,12 @@ impl TerminalRenderer {
             return;
         }
         for square in piece.view() {
-            let color_str = piece.color.get_color();
-            let text = color_str.as_str();
+            let (text, color) = piece.color.get_color(self.state.borrow().emoji);
 
             print_xy(
                 ((xy(&square).0 + 2) * 2) as u16,
                 (xy(&square).1 + 2) as u16,
-                Color::AnsiValue(0),
+                Color::AnsiValue(color),
                 text,
                 (3, 13),
             );
@@ -243,7 +300,7 @@ impl TerminalRenderer {
 ///
 /// Prints the text at the given position with the given color.
 ///
-pub fn print_xy(x: u16, y: u16, color: Color, text: &str, board_offset: (u16, u16)) {
+pub fn print_xy(x: u16, y: u16, color: Color, text: String, board_offset: (u16, u16)) {
     // Here we use unwrap, because really we want to crash if we can't display anything
     let _ = stdout()
         .execute(cursor::MoveTo(
@@ -272,6 +329,7 @@ static STARTUP_MESSAGE: [&str; 18] = [
     "      space to drop",
     "      Delete or Backspace to restart",
     "      d toggle difficulty",
+    "      b to toggle block emojies",
     "      q to quit",
     "      u to undo",
     "      n to toggle next piece display",
@@ -281,24 +339,29 @@ static STARTUP_MESSAGE: [&str; 18] = [
     "",
     "",
     "",
-    "",
     "Press any key to continue",
 ];
 
-pub fn print_startup(color: u8) {
+pub fn print_startup(color: u8, emoji: Emoji) {
     for (i, line) in STARTUP_MESSAGE.iter().enumerate() {
-        print_xy(5, 5 + i as u16, Color::AnsiValue(color), line, (0, 0));
+        print_xy(
+            5,
+            5 + i as u16,
+            Color::AnsiValue(color),
+            line.to_string(),
+            (0, 0),
+        );
     }
     let mut x = 3;
     let y = 1;
     for piece in PIECES.iter() {
         for square in piece.view() {
-            let color_str = piece.color.get_color();
-            let text = color_str.as_str();
+            let (text, color) = piece.color.get_color(emoji);
+
             print_xy(
                 ((xy(&square).0 * 2) + 2) as u16,
                 (xy(&square).1 + 2) as u16,
-                Color::AnsiValue(0),
+                Color::AnsiValue(color),
                 text,
                 (x, y),
             );

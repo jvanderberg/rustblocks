@@ -70,7 +70,7 @@ checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 
 [[package]]
 name = "blocks_lib"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "rand",
 ]
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "rustblocks"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "blocks_lib",
  "clap",

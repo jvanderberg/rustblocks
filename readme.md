@@ -27,7 +27,7 @@ Controls:
 
 `rustblocks -h`
 
-````
+```
 
 Usage: rustblocks [OPTIONS]
 
@@ -55,5 +55,3 @@ Options:
 #### Windows
 
 [Rustblocks x86_64 (will run on Windows for Arm)](./bin/Windows/rustblocks.exe)
-```
-````
